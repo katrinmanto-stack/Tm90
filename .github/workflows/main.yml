@@ -1,0 +1,26 @@
+name: unzip
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract
+        run: |
+          set -e
+          unzip -q sungold-repo.zip -d /tmp/x
+          src=/tmp/x/sungold-store
+          cp "$src"/.github/workflows/ci.yml ci.yml
+          cp "$src"/.github/workflows/android.yml android.yml
+          rm -rf "$src/.github"
+          cp -r "$src"/. .
+          rm sungold-repo.zip
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit -m "Add Sungold files"
+          git push
