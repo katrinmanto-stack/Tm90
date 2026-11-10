@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "groups": [
+    {"id": "brand",  "label": "هویت فروشگاه", "icon": "store"},
+    {"id": "colors", "label": "رنگ و ظاهر",   "icon": "palette"},
+    {"id": "header", "label": "هدر و فوتر",   "icon": "layout"},
+    {"id": "home",   "label": "صفحه اصلی",    "icon": "home"},
+    {"id": "shop",   "label": "فروشگاه",       "icon": "bag"}
+  ],
+  "presets": [
+    {"id": "midnight-gold", "label": "سرمه‌ای و طلایی",   "colors": {"color_brand": "#232c6e", "color_accent": "#f6b93b", "color_ink": "#101535", "color_sale": "#d63f2e"}},
+    {"id": "black-gold",    "label": "مشکی و طلایی",      "colors": {"color_brand": "#2b261c", "color_accent": "#f2b230", "color_ink": "#17140f", "color_sale": "#d63f2e"}},
+    {"id": "ocean-coral",   "label": "اقیانوسی و مرجانی", "colors": {"color_brand": "#0e6f73", "color_accent": "#ff9f7a", "color_ink": "#0f2a2c", "color_sale": "#d63f2e"}},
+    {"id": "berry-rose",    "label": "عنابی و رزگلد",     "colors": {"color_brand": "#7a1f3d", "color_accent": "#e8b4a0", "color_ink": "#2a1019", "color_sale": "#c2331f"}},
+    {"id": "forest-sand",   "label": "جنگلی و شنی",       "colors": {"color_brand": "#1f4d3a", "color_accent": "#e3c07a", "color_ink": "#12241c", "color_sale": "#c2331f"}}
+  ],
+  "fields": [
+    {"key": "site_title", "group": "brand", "type": "text", "label": "نام فروشگاه", "store": "option:blogname", "default": "", "max": 60,
+     "help": "در لوگوی متنی، عنوان مرورگر و فوتر نمایش داده می‌شود."},
+    {"key": "tagline", "group": "brand", "type": "text", "label": "شعار فروشگاه", "store": "option:blogdescription", "default": "", "max": 120},
+    {"key": "logo", "group": "brand", "type": "image", "label": "لوگو", "store": "mod:custom_logo", "default": 0,
+     "help": "اگر لوگو بگذارید به‌جای نام متنی نمایش داده می‌شود. پیشنهاد: PNG شفاف با ارتفاع حدود ۱۰۰ پیکسل."},
+    {"key": "site_icon", "group": "brand", "type": "image", "label": "آیکن سایت (فاوآیکن)", "store": "option:site_icon", "default": 0,
+     "help": "تصویر مربعی حداقل ۵۱۲ در ۵۱۲ پیکسل."},
+
+    {"key": "color_brand", "section": "رنگ‌ها",  "group": "colors", "type": "color", "label": "رنگ اصلی",       "default": "#232c6e",
+     "help": "دکمه‌ها، لینک‌ها و پس‌زمینه‌ی هیرو. اگر خیلی روشن باشد خودکار کمی تیره می‌شود تا متن سفید خوانا بماند."},
+    {"key": "color_accent", "group": "colors", "type": "color", "label": "رنگ تأکید",      "default": "#f6b93b", "help": "نشان‌ها، دکمه‌های مهم و جزئیات طلایی."},
+    {"key": "color_ink",    "group": "colors", "type": "color", "label": "رنگ متن و فوتر", "default": "#101535", "help": "باید تیره باشد."},
+    {"key": "color_sale",   "group": "colors", "type": "color", "label": "رنگ تخفیف",      "default": "#d63f2e"},
+    {"key": "radius", "section": "شکل", "group": "colors", "type": "select", "label": "گردی گوشه‌ها", "default": "soft",
+     "options": [["sharp", "تیز"], ["soft", "ملایم"], ["round", "گرد"]]},
+
+    {"key": "topbar_on", "section": "نوار بالا و ناوبری", "group": "header", "type": "toggle", "label": "نوار بالای سایت", "default": true},
+    {"key": "topbar", "group": "header", "type": "text", "label": "متن نوار بالا", "default": "ارسال سریع به سراسر کشور", "max": 120},
+    {"key": "tabbar_on", "group": "header", "type": "toggle", "label": "نوار ناوبری پایین (موبایل)", "default": true},
+    {"key": "phone", "section": "راه‌های ارتباطی", "group": "header", "type": "phone", "label": "شماره تماس", "default": ""},
+    {"key": "whatsapp", "group": "header", "type": "phone", "label": "واتس‌اپ", "default": "", "help": "مثلاً 09123456789"},
+    {"key": "instagram", "group": "header", "type": "url", "label": "اینستاگرام", "default": "", "prefix": "https://instagram.com/", "help": "آدرس کامل یا فقط نام کاربری"},
+    {"key": "telegram", "group": "header", "type": "url", "label": "تلگرام", "default": "", "prefix": "https://t.me/", "help": "آدرس کامل یا فقط نام کاربری"},
+    {"key": "email", "group": "header", "type": "email", "label": "ایمیل", "default": ""},
+    {"key": "about", "section": "فوتر", "group": "header", "type": "textarea", "label": "متن درباره‌ی فروشگاه (فوتر)", "default": "لباس زنانه، اکسسوری و گجت‌های منتخب با ضمانت اصالت کالا.", "max": 300},
+    {"key": "copyright", "group": "header", "type": "text", "label": "متن کپی‌رایت", "default": "", "max": 120, "help": "خالی = «© سال و نام فروشگاه»"},
+
+    {"key": "home_sections", "section": "ترتیب و نمایش بخش‌ها", "group": "home", "type": "sections", "label": "بخش‌های صفحه اصلی",
+     "help": "ترتیب را با فلش‌ها عوض کنید و بخش‌های اضافه را خاموش کنید.",
+     "options": [["categories", "دسته‌بندی‌ها"], ["featured", "محصولات ویژه"], ["promo", "بنر تخفیف"], ["rows", "ردیف محصولات هر دسته"], ["benefits", "مزایای فروشگاه"]],
+     "default": [{"id": "categories", "on": true}, {"id": "featured", "on": true}, {"id": "promo", "on": true}, {"id": "rows", "on": true}, {"id": "benefits", "on": true}]},
+    {"key": "hero_style", "section": "هیرو (بالای صفحه)", "group": "home", "type": "select", "label": "حالت هیرو", "default": "dark",
+     "options": [["dark", "رنگ اصلی"], ["gold", "رنگ تأکید"]], "help": "هیرو فقط وقتی دیده می‌شود که اسلایدر بنر نداشته باشید."},
+    {"key": "hero_title", "group": "home", "type": "text", "label": "تیتر هیرو", "default": "استایل خودت را پیدا کن", "max": 60},
+    {"key": "hero_text", "group": "home", "type": "textarea", "label": "متن زیر تیتر", "default": "لباس زنانه، اکسسوری و گجت‌های منتخب؛ با ارسال سریع و ضمانت اصالت کالا.", "max": 200},
+    {"key": "hero_btn1", "group": "home", "type": "text", "label": "دکمه‌ی اول", "default": "مشاهده فروشگاه", "max": 30},
+    {"key": "hero_btn1_url", "group": "home", "type": "link", "label": "لینک دکمه‌ی اول", "default": "", "help": "خالی = صفحه‌ی فروشگاه"},
+    {"key": "hero_btn2", "group": "home", "type": "text", "label": "دکمه‌ی دوم", "default": "پیشنهادهای ویژه", "max": 30},
+    {"key": "hero_btn2_url", "group": "home", "type": "link", "label": "لینک دکمه‌ی دوم", "default": "#featured"},
+    {"key": "featured_title", "section": "محصولات ویژه", "group": "home", "type": "text", "label": "عنوان بخش محصولات ویژه", "default": "محصولات ویژه", "max": 40},
+    {"key": "featured_count", "group": "home", "type": "number", "label": "تعداد محصولات ویژه", "default": 8, "min": 4, "max": 16, "step": 4},
+    {"key": "rows_count", "section": "ردیف محصولات دسته‌ها", "group": "home", "type": "number", "label": "تعداد ردیف‌های دسته‌ها", "default": 3, "min": 1, "max": 4, "step": 1},
+    {"key": "promo_title", "section": "بنر تخفیف", "group": "home", "type": "text", "label": "بنر تخفیف: تیتر", "default": "تخفیف‌های ویژه را از دست نده", "max": 60},
+    {"key": "promo_text", "group": "home", "type": "text", "label": "بنر تخفیف: متن", "default": "محصولات تخفیف‌دار را یک‌جا ببین و سریع‌تر انتخاب کن.", "max": 120},
+    {"key": "promo_btn", "group": "home", "type": "text", "label": "بنر تخفیف: دکمه", "default": "مشاهده تخفیف‌ها", "max": 30},
+    {"key": "benefits", "group": "home", "type": "benefits", "label": "مزایای فروشگاه", "help": "حداکثر ۴ مورد",
+     "default": [
+       {"title": "ارسال به سراسر کشور", "text": "با کد رهگیری"},
+       {"title": "ضمانت اصالت کالا", "text": "همه محصولات اصل"},
+       {"title": "پرداخت امن", "text": "درگاه آنلاین معتبر"},
+       {"title": "پشتیبانی", "text": "پاسخ‌گویی سریع"}
+     ]},
+
+    {"key": "shop_per_page", "group": "shop", "type": "number", "label": "تعداد محصول در هر صفحه", "default": 12, "min": 8, "max": 48, "step": 4},
+    {"key": "shop_columns", "group": "shop", "type": "select", "label": "ستون محصولات (دسکتاپ)", "default": "4", "options": [["3", "۳ ستون"], ["4", "۴ ستون"]]},
+    {"key": "sticky_atc", "group": "shop", "type": "toggle", "label": "نوار افزودن به سبد در صفحه‌ی محصول", "default": true}
+  ]
+}

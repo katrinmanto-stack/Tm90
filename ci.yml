@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: PHP syntax (php -l) — حیاتی؛ قبل از نصب روی سایت واقعی
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y php-cli
+          find theme -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Schema is valid JSON with unique keys
+        run: python3 -c "import json;j=json.load(open('theme/bazar/inc/schema.json'));k=[f['key'] for f in j['fields']];assert len(k)==len(set(k));print(len(k),'fields OK')"
+      - name: App JavaScript syntax
+        run: for f in app/js/*.js app/sw.js tools/mock-server.mjs; do node --check "$f"; done
+      - name: Palette contrast guarantees
+        run: node tools/test-palette.mjs
+      - name: Build theme zip
+        run: cd theme && zip -r ../bazar-theme.zip bazar -x '*.DS_Store'
+      - uses: actions/upload-artifact@v4
+        with: { name: bazar-theme, path: bazar-theme.zip }
+
+  pages:
+    if: github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions: { pages: write, id-token: write }
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: app }
+      - id: deployment
+        uses: actions/deploy-pages@v4
