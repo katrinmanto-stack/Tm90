@@ -141,7 +141,89 @@ function sections(f, v, set) {
   return box;
 }
 
-const RENDERERS = { toggle, select, number, color, image, benefits, sections };
+/* ---------- بنرهای اسلایدر (افزودن، حذف، ترتیب، تصویر، لینک) ---------- */
+function banners(f, v, set, ctx) {
+  const MAX = f.max || 8;
+  let list = (Array.isArray(v) ? v : []).map((b) => ({ img: b.img && b.img.id ? { ...b.img } : { id: 0, url: '' }, link: b.link || '', alt: b.alt || '', on: b.on !== false }));
+  const box = h('div', { class: 'list bnrs' });
+  const add = h('button', { type: 'button', class: 'btn sm' }, icon('plus', 18), 'افزودن بنر');
+  const emit = () => set(list.map((b) => ({ ...b, img: { ...b.img } })));
+  const move = (i, d) => { const j = i + d; if (j < 0 || j >= list.length) return; [list[i], list[j]] = [list[j], list[i]]; emit(); draw(); };
+  const draw = () => {
+    box.replaceChildren(...list.map((row, i) => {
+      const sw = h('input', { type: 'checkbox', role: 'switch', 'aria-label': 'نمایش بنر ' + (i + 1) });
+      sw.checked = row.on;
+      const card = h('div', { class: 'bnr' + (row.on ? '' : ' off') });
+      sw.addEventListener('change', () => { row.on = sw.checked; card.classList.toggle('off', !row.on); emit(); });
+      card.append(
+        h('div', { class: 'bnr-h' },
+          h('b', {}, 'بنر ' + (i + 1)),
+          h('div', { class: 'li-a' },
+            h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'بالا', disabled: i === 0, onclick: () => move(i, -1) }, icon('up', 18)),
+            h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'پایین', disabled: i === list.length - 1, onclick: () => move(i, 1) }, icon('down', 18)),
+            h('label', { class: 'switch' }, sw, h('span', { class: 'sw' })),
+            h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'حذف بنر', onclick: () => { list.splice(i, 1); emit(); draw(); } }, icon('trash', 18)))),
+        image({ label: 'تصویر بنر ' + (i + 1) }, row.img, (img) => { row.img = img; emit(); }, ctx),
+        h('input', { class: 'in ltr', dir: 'ltr', type: 'text', inputmode: 'url', placeholder: 'https://… or /shop/', value: row.link, autocomplete: 'off', spellcheck: 'false', 'aria-label': 'لینک بنر ' + (i + 1), oninput: (e) => { row.link = e.target.value; emit(); } }),
+        h('input', { class: 'in', type: 'text', placeholder: 'متن جایگزین تصویر (اختیاری، برای سئو و دسترسی‌پذیری)', value: row.alt, maxlength: 100, autocomplete: 'off', 'aria-label': 'متن جایگزین بنر ' + (i + 1), oninput: (e) => { row.alt = e.target.value; emit(); } }));
+      return card;
+    }));
+    if (!list.length) box.append(h('p', { class: 'help' }, 'هنوز بنری نیست؛ هیروی متنی نمایش داده می‌شود.'));
+    add.disabled = list.length >= MAX;
+  };
+  add.onclick = () => { list.push({ img: { id: 0, url: '' }, link: '', alt: '', on: true }); emit(); draw(); };
+  draw();
+  return h('div', {}, box, add);
+}
+
+/* ---------- منوی اصلی و همبرگری ---------- */
+function menu(f, v, set, ctx) {
+  const MAX = f.max || 10;
+  let list = (Array.isArray(v) ? v : []).map((m) => ({ title: m.title || '', url: m.url || '', on: m.on !== false }));
+  const box = h('div', { class: 'list bnrs' });
+  const add = h('button', { type: 'button', class: 'btn sm' }, icon('plus', 18), 'افزودن آیتم');
+  const sug = h('button', { type: 'button', class: 'btn sm' }, icon('plus', 18), 'افزودن آیتم‌های پیشنهادی');
+  const emit = () => set(list.map((m) => ({ ...m })));
+  const move = (i, d) => { const j = i + d; if (j < 0 || j >= list.length) return; [list[i], list[j]] = [list[j], list[i]]; emit(); draw(); };
+  const draw = () => {
+    box.replaceChildren(...list.map((row, i) => {
+      const sw = h('input', { type: 'checkbox', role: 'switch', 'aria-label': 'نمایش آیتم ' + (i + 1) });
+      sw.checked = row.on;
+      const card = h('div', { class: 'bnr mn' + (row.on ? '' : ' off') });
+      sw.addEventListener('change', () => { row.on = sw.checked; card.classList.toggle('off', !row.on); emit(); });
+      card.append(
+        h('div', { class: 'bnr-h' },
+          h('b', {}, 'آیتم ' + (i + 1)),
+          h('div', { class: 'li-a' },
+            h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'بالا', disabled: i === 0, onclick: () => move(i, -1) }, icon('up', 18)),
+            h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'پایین', disabled: i === list.length - 1, onclick: () => move(i, 1) }, icon('down', 18)),
+            h('label', { class: 'switch' }, sw, h('span', { class: 'sw' })),
+            h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'حذف آیتم', onclick: () => { list.splice(i, 1); emit(); draw(); } }, icon('trash', 18)))),
+        h('input', { class: 'in', type: 'text', placeholder: 'عنوان (مثلاً درباره ما)', value: row.title, maxlength: 40, autocomplete: 'off', 'aria-label': 'عنوان آیتم ' + (i + 1), oninput: (e) => { row.title = e.target.value; emit(); } }),
+        h('input', { class: 'in ltr', dir: 'ltr', type: 'text', inputmode: 'url', placeholder: 'https://… or /about/', value: row.url, autocomplete: 'off', spellcheck: 'false', 'aria-label': 'لینک آیتم ' + (i + 1), oninput: (e) => { row.url = e.target.value; emit(); } }));
+      return card;
+    }));
+    if (!list.length) box.append(h('p', { class: 'help' }, 'آیتمی تعریف نشده؛ منوی وردپرس (یا منوی پیش‌فرض) استفاده می‌شود.'));
+    add.disabled = list.length >= MAX;
+  };
+  add.onclick = () => { list.push({ title: '', url: '', on: true }); emit(); draw(); };
+  const defs = (ctx && ctx.navDefaults && ctx.navDefaults()) || [];
+  sug.onclick = () => {
+    let missing = false;
+    for (const d of defs) {
+      if (list.length >= MAX) break;
+      if (list.some((x) => x.url === d.url)) continue;
+      list.push({ title: d.title, url: d.url, on: true });
+      if (d.missing) missing = true;
+    }
+    emit(); draw();
+    if (missing) ctx.toast('صفحه‌ی «درباره ما» هنوز در وردپرس ساخته نشده؛ یک برگه با نشانی about بسازید.', 'warn');
+  };
+  draw();
+  return h('div', { class: 'row-actions' }, box, h('div', { class: 'btnrow' }, add, defs.length ? sug : ''));
+}
+
+const RENDERERS = { toggle, select, number, color, image, benefits, sections, banners, menu };
 
 export function renderField(f, value, onChange, ctx) {
   const control = (RENDERERS[f.type] || textInput)(f, value, onChange, ctx);
