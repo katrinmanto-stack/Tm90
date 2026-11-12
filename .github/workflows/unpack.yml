@@ -1,0 +1,33 @@
+name: unpack
+on:
+  push:
+    paths: ['sungold-store-v2.zip']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack zip into the repo
+        run: |
+          set -e
+          test -f sungold-store-v2.zip || { echo "zip not found"; exit 1; }
+          rm -rf /tmp/x && mkdir /tmp/x
+          unzip -q sungold-store-v2.zip -d /tmp/x
+          SRC=/tmp/x
+          if [ -d /tmp/x/sungold-store ]; then SRC=/tmp/x/sungold-store; fi
+          rm -rf "$SRC/.github" "$SRC/.git"
+          cp -a "$SRC"/. ./
+          rm -f sungold-store-v2.zip
+          git config user.name "unpack-bot"
+          git config user.email "unpack-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "Update from sungold-store-v2.zip" || echo "nothing to commit"
+          git push origin HEAD:${{ github.ref_name }}
+      - name: Run CI (build + publish the app)
+        run: gh workflow run ci.yml --ref ${{ github.ref_name }}
+        env:
+          GH_TOKEN: ${{ github.token }}
