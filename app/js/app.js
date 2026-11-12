@@ -2,8 +2,9 @@ import { h, $, mount, toast, debounce } from './dom.js';
 import { icon } from './icons.js';
 import { loadConn, saveConn, clearConn, connect, call, uploadImage } from './api.js';
 import { renderField, presetsBlock, paletteStrip } from './fields.js';
+import { mountProducts, saveCurrent, isDirty } from './products.js';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '2.0.0';
 const root = $('#app');
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -11,14 +12,16 @@ const wide = () => matchMedia('(min-width:1000px)').matches;
 
 const S = {
   conn: null, schema: null, fields: new Map(), base: {}, values: {}, site: {},
-  group: null, busy: false, previewOpen: false, device: 'mobile', previewUrl: '', previewTimer: 0, install: null,
+  group: null, tab: 'look', busy: false, previewOpen: false, device: 'mobile', previewUrl: '', previewTimer: 0, install: null,
 };
 
 /* ================= کمکی‌های وضعیت ================= */
 const dirtyKeys = () => Object.keys(S.values).filter((k) => !same(S.values[k], S.base[k]));
 function payload(keys) {
   const o = {};
-  for (const k of keys) { const f = S.fields.get(k); const v = S.values[k]; o[k] = f && f.type === 'image' ? (v && v.id) || 0 : v; }
+  for (const k of keys) { const f = S.fields.get(k); const v = S.values[k]; o[k] = f && f.type === 'image' ? (v && v.id) || 0
+    : f && f.type === 'banners' ? (v || []).filter((b) => b.img && b.img.id).map((b) => ({ img: b.img.id, link: b.link, alt: b.alt, on: b.on }))
+    : v; }
   return o;
 }
 function setSchemaAndValues(schema, values, site) {
@@ -61,7 +64,7 @@ function viewConnect(prefill = {}, error = '') {
       const { conn, ping, data } = await connect(site.value, user.value, pass.value);
       const schema = await call(conn, '/bazar/v1/schema');
       saveConn(conn); S.conn = conn;
-      setSchemaAndValues(schema, data.values, { name: ping.name, version: ping.version, url: conn.site, woocommerce: ping.woocommerce });
+      setSchemaAndValues(schema, data.values, { name: ping.name, version: ping.version, url: conn.site, woocommerce: ping.woocommerce, nav_defaults: (data.site && data.site.nav_defaults) || [] });
       viewMain();
     } catch (err) {
       msg.textContent = err.message; msg.hidden = false;
@@ -79,7 +82,7 @@ let frame, pvbox, pvwrap, pvstate, colorExtras;
 function viewMain() {
   const appbar = h('header', { class: 'appbar' },
     h('div', { class: 'brandmark', 'aria-hidden': 'true' }, h('i'), h('i'), h('i')),
-    h('div', { class: 'ttl' }, h('b', {}, S.site.name || 'Sungold'), h('small', {}, 'مدیریت ظاهر فروشگاه')),
+    h('div', { class: 'ttl' }, h('b', {}, S.site.name || 'Sungold'), h('small', {}, 'مدیریت فروشگاه')),
     h('button', { class: 'iconbtn light', type: 'button', onclick: openSettings, 'aria-label': 'تنظیمات اتصال' }, icon('gear')));
 
   frame = h('iframe', { id: 'pvframe', title: 'پیش‌نمایش سایت', sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups', referrerpolicy: 'no-referrer' });
@@ -104,22 +107,46 @@ function viewMain() {
 
   mount(root,
     h('div', { class: 'shell' },
-      h('div', { class: 'col' }, appbar, h('nav', { class: 'groups', id: 'groups', 'aria-label': 'بخش‌های تنظیمات' }), h('main', { class: 'form', id: 'form' })),
+      h('div', { class: 'col' }, appbar, tabsNav(), h('nav', { class: 'groups', id: 'groups', 'aria-label': 'بخش‌های تنظیمات' }), h('main', { class: 'form', id: 'form' })),
       pane),
     h('div', { class: 'bar', id: 'bar' }));
   drawGroups(); renderForm(); updateBar();
-  if (wide()) schedulePreview(true);
+  if (S.tab === 'products') setTab('products'); else if (wide()) schedulePreview(true);
+}
+
+/* ---------- تب‌های اصلی: ظاهر قالب | محصولات ---------- */
+const prodCtx = () => ({ call: (route, opts) => call(S.conn, route, opts), upload: (f) => uploadImage(S.conn, f), toast, siteName: S.site.name, siteUrl: S.site.url, woocommerce: S.site.woocommerce !== false });
+function tabsNav() {
+  const t = (id, label, ic) => h('button', { type: 'button', role: 'tab', 'data-tab': id, class: S.tab === id ? 'on' : '', 'aria-selected': String(S.tab === id), onclick: () => setTab(id) }, icon(ic, 18), label);
+  return h('nav', { class: 'apptabs', role: 'tablist', 'aria-label': 'بخش‌های اپ' }, t('look', 'ظاهر', 'palette'), t('banners', 'بنرها', 'image'), t('products', 'محصولات', 'box'));
+}
+function syncTabs() {
+  document.querySelectorAll('[data-tab]').forEach((b) => { const on = b.dataset.tab === S.tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+}
+function setTab(t) {
+  S.tab = t;
+  if (t === 'banners') S.group = 'home';
+  const shell = $('.shell'); if (shell) shell.classList.toggle('mode-products', t === 'products');
+  document.body.classList.toggle('pmode', t === 'products');
+  const bar = $('#bar'); if (bar) bar.hidden = t === 'products';
+  syncTabs();
+  if (t !== 'banners') window.scrollTo({ top: 0 });
+  if (t === 'products') mountProducts($('#form'), prodCtx());
+  else {
+    drawGroups(); renderForm(); updateBar(); schedulePreview(true);
+    if (t === 'banners') requestAnimationFrame(() => { const el = $('.field[data-key=banners]'); if (el) { const top = el.getBoundingClientRect().top + scrollY - 130; window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' }); } });
+  }
 }
 
 function drawGroups() {
   $('#groups').replaceChildren(...S.schema.groups.map((g) => h('button', {
     type: 'button', class: 'chip' + (g.id === S.group ? ' on' : ''), 'aria-current': g.id === S.group ? 'true' : null,
-    onclick: () => { S.group = g.id; drawGroups(); renderForm(); window.scrollTo({ top: 0 }); },
+    onclick: () => { S.group = g.id; if (S.tab === 'banners') { S.tab = 'look'; syncTabs(); } drawGroups(); renderForm(); window.scrollTo({ top: 0 }); },
   }, icon(g.icon, 18), g.label)));
 }
 
 function renderForm() {
-  const ctx = { toast, upload: (file) => uploadImage(S.conn, file) };
+  const ctx = { toast, upload: (file) => uploadImage(S.conn, file), navDefaults: () => S.site.nav_defaults || [] };
   const fields = S.schema.fields.filter((f) => f.group === S.group);
   const out = [];
   let card = null;
@@ -197,7 +224,7 @@ function setPvState(t) { if (!pvstate) return; pvstate.textContent = t; pvstate.
 
 function schedulePreview(now) {
   clearTimeout(S.previewTimer);
-  if (!previewVisible()) return;
+  if (S.tab === 'products' || !previewVisible()) return;
   S.previewTimer = setTimeout(refreshPreview, now ? 0 : 900);
 }
 async function refreshPreview() {
@@ -241,8 +268,8 @@ function openSettings() {
 async function boot() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
   addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.install = e; });
-  addEventListener('beforeunload', (e) => { if (S.schema && dirtyKeys().length) { e.preventDefault(); e.returnValue = ''; } });
-  addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && S.schema) { e.preventDefault(); save(); } });
+  addEventListener('beforeunload', (e) => { if (S.schema && (dirtyKeys().length || isDirty())) { e.preventDefault(); e.returnValue = ''; } });
+  addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && S.schema) { e.preventDefault(); if (S.tab === 'products') saveCurrent(); else save(); } });
 
   const c = loadConn();
   if (!c) return viewConnect();
@@ -252,7 +279,7 @@ async function boot() {
     const [schema, data, ping] = await Promise.all([
       call(c, '/bazar/v1/schema'), call(c, '/bazar/v1/settings'), call(c, '/bazar/v1/ping', { auth: false }).catch(() => ({})),
     ]);
-    setSchemaAndValues(schema, data.values, { name: (data.site && data.site.name) || ping.name, version: (data.site && data.site.version) || ping.version, url: c.site, woocommerce: ping.woocommerce });
+    setSchemaAndValues(schema, data.values, { name: (data.site && data.site.name) || ping.name, version: (data.site && data.site.version) || ping.version, url: c.site, woocommerce: ping.woocommerce, nav_defaults: (data.site && data.site.nav_defaults) || [] });
     viewMain();
   } catch (e) {
     S.conn = null;
