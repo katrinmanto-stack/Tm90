@@ -202,6 +202,17 @@ function pickFile(btn, then) {
   return f;
 }
 
+/** انتخاب عکس خام ← استودیوی عکس ← آپلود نتیجه. onResult({id,url}) */
+function rawPicker(btn, onResult) {
+  const f = h('input', { type: 'file', accept: 'image/*', hidden: true });
+  f.onchange = () => {
+    const file = f.files[0]; f.value = '';
+    if (file) C.studio(file, async (out) => { onResult(await C.upload(out)); });
+  };
+  btn.onclick = () => f.click();
+  return f;
+}
+
 function imagesCard() {
   const v = E.v;
   const card = h('section', { class: 'card' }, h('h2', {}, 'تصاویر'));
@@ -209,20 +220,24 @@ function imagesCard() {
   const altIn = (img, ph) => { const el = h('input', { class: 'in', type: 'text', placeholder: ph, maxlength: 125, autocomplete: 'off', 'aria-label': ph }); el.value = img.alt || ''; el.addEventListener('input', () => { img.alt = el.value; touch(); }); return el; };
 
   const drawMain = () => {
-    const pick = h('button', { type: 'button', class: 'btn sm' }, icon('image', 18), v.image.id ? 'تعویض تصویر' : 'انتخاب تصویر اصلی');
+    const pick = h('button', { type: 'button', class: 'btn sm ghost' }, icon('image', 18), 'انتخاب تصویر آماده');
     const file = pickFile(pick, (r) => { v.image = { id: r.id, url: r.url, alt: v.image.alt || '' }; drawMain(); touch(); });
+    const raw = h('button', { type: 'button', class: 'btn sm primary' }, icon('wand', 18), v.image.id ? 'عکس خام جدید' : 'آماده‌سازی عکس خام');
+    const rawFile = rawPicker(raw, (r) => { v.image = { id: r.id, url: r.url, alt: v.image.alt || v.name.trim() }; drawMain(); touch(); });
     const del = h('button', { type: 'button', class: 'btn sm ghost', hidden: !v.image.id, onclick: () => { v.image = { id: 0, url: '', alt: '' }; drawMain(); touch(); } }, icon('trash', 18), 'حذف');
-    main.replaceChildren(h('div', { class: 'imgf' }, h('div', { class: 'thumb big' }, v.image.url ? h('img', { src: v.image.url, alt: '' }) : icon('image', 30)), h('div', { class: 'imgf-b' }, pick, del, file)),
+    main.replaceChildren(h('div', { class: 'imgf' }, h('div', { class: 'thumb big' }, v.image.url ? h('img', { src: v.image.url, alt: '' }) : icon('image', 30)), h('div', { class: 'imgf-b' }, raw, pick, del, file, rawFile)),
       v.image.id ? h('div', { class: 'altrow' }, altIn(v.image, 'متن جایگزین تصویر اصلی (alt)')) : null);
   };
   const drawGal = () => {
-    const add = h('button', { type: 'button', class: 'btn sm', disabled: v.gallery.length >= 12 }, icon('plus', 18), 'افزودن به گالری');
+    const add = h('button', { type: 'button', class: 'btn sm ghost', disabled: v.gallery.length >= 12 }, icon('plus', 18), 'افزودن تصویر آماده');
     const file = pickFile(add, (r) => { v.gallery.push({ id: r.id, url: r.url, alt: '' }); drawGal(); touch(); });
+    const addRaw = h('button', { type: 'button', class: 'btn sm primary', disabled: v.gallery.length >= 12 }, icon('wand', 18), 'افزودن عکس خام');
+    const addRawFile = rawPicker(addRaw, (r) => { v.gallery.push({ id: r.id, url: r.url, alt: v.name.trim() }); drawGal(); touch(); });
     gal.replaceChildren(...v.gallery.map((g, i) => h('div', { class: 'gitem' },
       h('div', { class: 'thumb' }, g.url ? h('img', { src: g.url, alt: '' }) : icon('image', 22)),
       altIn(g, 'متن جایگزین (alt) تصویر ' + (i + 1)),
       h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'حذف تصویر', onclick: () => { v.gallery.splice(i, 1); drawGal(); touch(); } }, icon('trash', 18)))),
-      h('div', { class: 'btnrow' }, add, file));
+      h('div', { class: 'btnrow' }, addRaw, add, file, addRawFile));
   };
   drawMain(); drawGal();
   card.append(main, h('h3', { class: 'sub-h' }, 'گالری'), gal, h('p', { class: 'help' }, 'متن جایگزین (alt) برای سئوی تصاویر و کاربران نابینا مهم است؛ نام و ویژگی اصلی محصول را کوتاه بنویسید.'));
@@ -256,7 +271,7 @@ function seoCard() {
     touch(); C.toast('موارد خالی با پیشنهاد خودکار پر شد؛ پیش از ذخیره ویرایش کنید.', 'ok');
   } }, icon('wand', 18), 'پر کردن خودکار');
 
-  card.append(driverNote, scoreBox,
+  card.append(...[driverNote, scoreBox,
     h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'پیش‌نمایش در گوگل'), serpBox),
     writable ? fld('عنوان سئو', inTitle) : null, writable ? tCnt : null,
     writable ? fld('توضیح متا', inDesc) : null, writable ? dCnt : null,
@@ -264,7 +279,7 @@ function seoCard() {
     fld('نامک (نشانی محصول)', inSlug, 'کوتاه و شامل کلمه‌ی کلیدی؛ فاصله‌ها به خط‌تیره تبدیل می‌شوند.'),
     writable && meta && meta.seo.noindex ? toggleRow('مخفی از گوگل (noindex)', 'فقط برای محصولاتی که نمی‌خواهید در گوگل دیده شوند.', () => seo.noindex, (x) => { seo.noindex = x; touch(); }) : null,
     h('div', { class: 'btnrow' }, auto),
-    h('h3', { class: 'sub-h' }, 'بررسی سئو'), listEl);
+    h('h3', { class: 'sub-h' }, 'بررسی سئو'), listEl].filter(Boolean));
   seoRefs = { scoreBox, serpBox, listEl, tCnt, dCnt };
   return card;
 }

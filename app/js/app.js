@@ -3,8 +3,9 @@ import { icon } from './icons.js';
 import { loadConn, saveConn, clearConn, connect, call, uploadImage } from './api.js';
 import { renderField, presetsBlock, paletteStrip } from './fields.js';
 import { mountProducts, saveCurrent, isDirty } from './products.js';
+import { openStudio } from './photo.js';
 
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 const root = $('#app');
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -115,7 +116,7 @@ function viewMain() {
 }
 
 /* ---------- تب‌های اصلی: ظاهر قالب | محصولات ---------- */
-const prodCtx = () => ({ call: (route, opts) => call(S.conn, route, opts), upload: (f) => uploadImage(S.conn, f), toast, siteName: S.site.name, siteUrl: S.site.url, woocommerce: S.site.woocommerce !== false });
+const prodCtx = () => ({ call: (route, opts) => call(S.conn, route, opts), upload: (f) => uploadImage(S.conn, f), toast, studio: (file, onUse) => openStudio({ toast }, file, { onUse }), siteName: S.site.name, siteUrl: S.site.url, woocommerce: S.site.woocommerce !== false });
 function tabsNav() {
   const t = (id, label, ic) => h('button', { type: 'button', role: 'tab', 'data-tab': id, class: S.tab === id ? 'on' : '', 'aria-selected': String(S.tab === id), onclick: () => setTab(id) }, icon(ic, 18), label);
   return h('nav', { class: 'apptabs', role: 'tablist', 'aria-label': 'بخش‌های اپ' }, t('look', 'ظاهر', 'palette'), t('banners', 'بنرها', 'image'), t('products', 'محصولات', 'box'));
