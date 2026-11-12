@@ -1,6 +1,6 @@
 // Service worker: پوسته‌ی اپ را کش می‌کند تا سریع و آفلاین‌پذیر باز شود. درخواست‌های API هرگز کش نمی‌شوند.
-const CACHE = 'sungold-shell-v1';
-const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/api.js', 'js/dom.js', 'js/fields.js', 'js/icons.js', 'js/color.js', 'manifest.webmanifest', 'icons/icon.svg'];
+const CACHE = 'sungold-shell-v3';
+const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/api.js', 'js/dom.js', 'js/fields.js', 'js/icons.js', 'js/color.js', 'js/products.js', 'js/seo.js', 'js/matting.js', 'js/photo.js', 'studio-ai.html', 'manifest.webmanifest', 'icons/icon.svg'];
 
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {
