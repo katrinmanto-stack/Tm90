@@ -209,3 +209,5 @@ textarea.in{resize:vertical;min-height:84px}
 @media(min-width:1000px){.studio-bar{width:auto;inset-inline:0}}
 
 .studio-bar .btn{white-space:nowrap}
+
+.pick{touch-action:none;cursor:crosshair}
