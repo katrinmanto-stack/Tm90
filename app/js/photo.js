@@ -3,6 +3,7 @@
 import { h, debounce } from './dom.js';
 import { icon } from './icons.js';
 import { removeBg, bbox, outSize, fitRect } from './matting.js';
+import { grabCut, upscaleAlpha, applyAlpha, downscale, cleanMask, holeMap } from './grabcut.js';
 
 const WORK = 1600;
 
@@ -69,10 +70,10 @@ function range(min, max, get, set, label) {
  * file: عکس خام انتخاب‌شده‌ی کاربر.
  */
 export async function openStudio(ctx, file, { onUse, useLabel = 'استفاده برای محصول' } = {}) {
-  const S = { w: 0, h: 0, src: null, method: 'simple', tol: 35, bg: null, fill: false, ratio: '1:1', pad: 8, bgm: 'white', color: '#ffffff', shadow: true, size: 1200, ai: null, picking: false, busy: false, blob: null, cov: 1, aiMsg: '' };
+  const S = { w: 0, h: 0, src: null, method: 'box', box: null, boxEdit: true, boxCut: null, keepHoles: false, running: false, holeOpen: new Set(), layout: null, tol: 35, bg: null, fill: false, ratio: '1:1', pad: 8, bgm: 'white', color: '#ffffff', shadow: true, size: 1200, ai: null, picking: false, busy: false, blob: null, cov: 1, aiMsg: '' };
   let cut = null, cutKey = '', closed = false;
   const out = h('canvas', { class: 'pv-cv', role: 'img', 'aria-label': 'پیش‌نمایش عکس آماده' });
-  const pick = h('canvas', { class: 'pv-cv', hidden: true, role: 'img', 'aria-label': 'عکس اصلی؛ روی رنگ پس‌زمینه بزنید' });
+  const pick = h('canvas', { class: 'pv-cv pick', hidden: true, role: 'img', 'aria-label': 'عکس اصلی؛ روی رنگ پس‌زمینه بزنید' });
   const tmp = document.createElement('canvas');
   const pv = h('div', { class: 'pv' }, out, pick);
   const info = h('div', { class: 'help pv-i', 'aria-live': 'polite' });
@@ -98,6 +99,7 @@ export async function openStudio(ctx, file, { onUse, useLabel = 'استفاده 
   function computeCut() {
     if (S.method === 'none') return S.src.data;
     if (S.method === 'ai') return S.ai;
+    if (S.method === 'box') return S.boxCut;
     const key = [S.tol, S.fill, S.bg ? S.bg.join() : ''].join('|');
     if (!cut || cutKey !== key) {
       const r = removeBg(S.src.data.data, S.w, S.h, { tol: S.tol, fill: S.fill, bg: S.bg || undefined });
@@ -108,8 +110,13 @@ export async function openStudio(ctx, file, { onUse, useLabel = 'استفاده 
   function render() {
     if (closed) return;
     const img = computeCut();
-    pick.hidden = !S.picking; out.hidden = S.picking;
-    if (S.picking) { pick.width = S.w; pick.height = S.h; pick.getContext('2d').drawImage(S.src.cv, 0, 0); return; }
+    const showPick = S.picking || (S.method === 'box' && S.boxEdit);
+    pick.hidden = !showPick; out.hidden = showPick;
+    if (showPick) {
+      drawPick();
+      info.textContent = S.method === 'box' ? 'انگشت را روی عکس بکشید تا دور محصول کادر بسازید، بعد «اجرای برش» را بزنید.' : 'روی رنگ پس‌زمینه بزنید.';
+      warn.hidden = true; setReady(false); return;
+    }
     if (!img) { const cx = out.getContext('2d'); out.width = S.w; out.height = S.h; cx.drawImage(S.src.cv, 0, 0); info.textContent = S.aiMsg || 'برای حذف هوشمند، دکمه‌ی «اجرای حذف هوشمند» را بزنید.'; setReady(false); return; }
     const box = (S.method === 'none' ? null : bbox(img.data, S.w, S.h, 8)) || { x0: 0, y0: 0, x1: S.w, y1: S.h };
     const bw = box.x1 - box.x0, bh = box.y1 - box.y0, o = outSize(S.ratio, S.size, bw, bh);
@@ -117,7 +124,7 @@ export async function openStudio(ctx, file, { onUse, useLabel = 'استفاده 
     const cx = out.getContext('2d'), transparent = S.bgm === 'none';
     cx.clearRect(0, 0, o.w, o.h);
     if (!transparent) { cx.fillStyle = S.bgm === 'white' ? '#ffffff' : S.bgm === 'gray' ? '#f2f2f2' : S.color; cx.fillRect(0, 0, o.w, o.h); }
-    const f = fitRect(bw, bh, o.w, o.h, S.pad / 100);
+    const f = fitRect(bw, bh, o.w, o.h, S.pad / 100); S.layout = { box, bw, bh, f };
     tmp.width = S.w; tmp.height = S.h; tmp.getContext('2d').putImageData(img, 0, 0);
     if (S.shadow && !transparent && S.method !== 'none') {
       const rx = f.dw * 0.42, ry = Math.max(6, f.dh * 0.05);
@@ -148,6 +155,60 @@ export async function openStudio(ctx, file, { onUse, useLabel = 'استفاده 
   const ensureBlob = async () => { if (!S.blob) { await toBlob(out, 'image/webp', 0.86).then((b) => { S.blob = b; }); } return S.blob; };
   const fileOf = (b) => new File([b], `product-${Date.now()}.${(b.type.split('/')[1] || 'webp').replace('jpeg', 'jpg')}`, { type: b.type });
 
+  /* ----- کادر دور محصول (GrabCut) ----- */
+  function drawPick() {
+    pick.width = S.w; pick.height = S.h; const c = pick.getContext('2d'); c.drawImage(S.src.cv, 0, 0);
+    if (S.method !== 'box' || !S.box) return;
+    const { x0, y0, x1, y1 } = S.box;
+    c.fillStyle = 'rgba(0,0,0,.5)'; c.fillRect(0, 0, S.w, y0); c.fillRect(0, y1, S.w, S.h - y1); c.fillRect(0, y0, x0, y1 - y0); c.fillRect(x1, y0, S.w - x1, y1 - y0);
+    const lw = Math.max(3, S.w / 180); c.lineWidth = lw; c.strokeStyle = '#F6B93B'; c.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    c.fillStyle = '#F6B93B'; const r = lw * 2.2; for (const [x, y] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) { c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); }
+  }
+  const toImg = (e) => { const r = pick.getBoundingClientRect(); return [Math.min(S.w, Math.max(0, (e.clientX - r.left) / r.width * S.w)), Math.min(S.h, Math.max(0, (e.clientY - r.top) / r.height * S.h))]; };
+  let dragFrom = null;
+  pick.addEventListener('pointerdown', (e) => { if (S.method !== 'box' || !S.boxEdit) return; dragFrom = toImg(e); pick.setPointerCapture(e.pointerId); e.preventDefault(); });
+  pick.addEventListener('pointermove', (e) => {
+    if (!dragFrom) return; const [x, y] = toImg(e);
+    S.box = { x0: Math.round(Math.min(dragFrom[0], x)), y0: Math.round(Math.min(dragFrom[1], y)), x1: Math.round(Math.max(dragFrom[0], x)), y1: Math.round(Math.max(dragFrom[1], y)) }; drawPick();
+  });
+  const endDrag = () => { dragFrom = null; if (S.box && (S.box.x1 - S.box.x0 < 24 || S.box.y1 - S.box.y0 < 24)) { S.box = defaultBox(); drawPick(); } };
+  pick.addEventListener('pointerup', endDrag); pick.addEventListener('pointercancel', endDrag);
+  const defaultBox = () => ({ x0: Math.round(S.w * 0.08), y0: Math.round(S.h * 0.08), x1: Math.round(S.w * 0.92), y1: Math.round(S.h * 0.92) });
+  S.box = defaultBox();
+  const boxBtn = h('button', { type: 'button', class: 'btn sm primary' }, icon('wand', 18), 'اجرای برش');
+  boxBtn.onclick = async () => {
+    if (S.running) return;
+    if (!S.boxEdit) { S.boxEdit = true; drawCtl(); render(); return; }
+    S.running = true; boxBtn.disabled = true; boxBtn.classList.add('busy');
+    try {
+      const lo = downscale(S.src.data.data, S.w, S.h, 480), k = lo.k, b = S.box;
+      const rect = { x0: Math.round(b.x0 * k), y0: Math.round(b.y0 * k), x1: Math.round(b.x1 * k), y1: Math.round(b.y1 * k) };
+      info.textContent = 'در حال برش…';
+      const res = await grabCut(lo.px, lo.w, lo.h, rect, { iters: 5, yieldUi: true, onProgress: (i, t) => { info.textContent = `در حال برش… ${i} از ${t}`; } });
+      S.holeOpen = new Set(); S.gc = { res, lo }; S.gc.holes = holeMap(cleanMask(res.mask, lo.w, lo.h, { fillHoles: false }), lo.w, lo.h); applyBox(); S.boxEdit = false; if (!closed) { drawCtl(); render(); }
+    } catch { ctx.toast('برش انجام نشد. کادر را کمی بزرگ‌تر یا دقیق‌تر بکشید.', 'bad'); }
+    finally { S.running = false; boxBtn.disabled = false; boxBtn.classList.remove('busy'); }
+  };
+  function applyBox() {
+    const { res, lo } = S.gc, src = S.src.data.data;
+    const clean = cleanMask(res.mask, lo.w, lo.h, { fillHoles: !S.keepHoles, open: S.holeOpen });
+    const a = upscaleAlpha(clean, lo.w, lo.h, src, S.w, S.h, res.fgd, res.bgd);
+    S.boxCut = new ImageData(applyAlpha(src, S.w, S.h, a, 1), S.w, S.h);
+  }
+
+  // با زدن روی سوراخ (مثلاً داخل دسته‌ی جعبه) آن را باز یا بسته می‌کنید
+  out.addEventListener('click', (e) => {
+    if (S.method !== 'box' || !S.gc || !S.layout) return;
+    const r = out.getBoundingClientRect(), { box, bw, bh, f } = S.layout, { lo, holes } = S.gc;
+    const ox = (e.clientX - r.left) / r.width * out.width, oy = (e.clientY - r.top) / r.height * out.height;
+    const lx = Math.round((box.x0 + (ox - f.dx) / f.dw * bw) * lo.k), ly = Math.round((box.y0 + (oy - f.dy) / f.dh * bh) * lo.k);
+    let id = 0, best = 1e9;
+    for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) { const x = lx + dx, y = ly + dy; if (x < 0 || y < 0 || x >= lo.w || y >= lo.h) continue; const v = holes.lab[y * lo.w + x]; if (v && dx * dx + dy * dy < best) { best = dx * dx + dy * dy; id = v; } }
+    if (!id) return;
+    if (S.holeOpen.has(id)) S.holeOpen.delete(id); else S.holeOpen.add(id);
+    applyBox(); render();
+  });
+
   /* ----- حذف هوشمند ----- */
   const aiBtn = h('button', { type: 'button', class: 'btn sm' }, icon('wand', 18), 'اجرای حذف هوشمند');
   aiBtn.onclick = async () => {
@@ -165,6 +226,7 @@ export async function openStudio(ctx, file, { onUse, useLabel = 'استفاده 
 
   /* ----- چکاننده‌ی رنگ پس‌زمینه ----- */
   pick.addEventListener('click', (e) => {
+    if (S.method === 'box' || !S.picking) return;
     const r = pick.getBoundingClientRect(), x = Math.round((e.clientX - r.left) / r.width * S.w), y = Math.round((e.clientY - r.top) / r.height * S.h);
     const d = S.src.cv.getContext('2d').getImageData(Math.max(0, x - 2), Math.max(0, y - 2), 5, 5).data; let R = 0, G = 0, B = 0;
     for (let i = 0; i < d.length; i += 4) { R += d[i]; G += d[i + 1]; B += d[i + 2]; }
@@ -173,16 +235,22 @@ export async function openStudio(ctx, file, { onUse, useLabel = 'استفاده 
 
   /* ----- کنترل‌ها ----- */
   function drawCtl() {
+    boxBtn.replaceChildren(icon('wand', 18), S.boxEdit ? 'اجرای برش' : 'کادر دیگر');
     const simple = h('div', { class: S.method === 'simple' ? '' : 'hide' },
       row('حساسیت حذف پس‌زمینه', range(0, 100, () => S.tol, (v) => { S.tol = v; rerender(); }, 'حساسیت'), 'اگر بخشی از محصول پاک شد کمتر کنید؛ اگر پس‌زمینه ماند بیشتر.'),
       h('div', { class: 'btnrow' },
         h('button', { type: 'button', class: 'btn sm', onclick: () => { S.picking = !S.picking; drawCtl(); render(); } }, icon('palette', 18), S.picking ? 'روی رنگ پس‌زمینه بزنید…' : (S.bg ? 'انتخاب دوباره‌ی رنگ پس‌زمینه' : 'انتخاب رنگ پس‌زمینه از عکس')),
         S.bg ? h('button', { type: 'button', class: 'btn sm ghost', onclick: () => { S.bg = null; drawCtl(); render(); } }, 'تشخیص خودکار') : null),
       toggle('پاک‌کردن فضاهای بسته (مثلاً سوراخ دسته)', () => S.fill, (v) => { S.fill = v; render(); }));
+    const boxc = h('div', { class: S.method === 'box' ? '' : 'hide' },
+      h('div', { class: 'btnrow' }, boxBtn), S.boxEdit ? null : h('p', { class: 'help' }, 'نتیجه‌ی برش را در پیش‌نمایش ببینید. برای کادر دیگر دکمه‌ی بالا را بزنید.'),
+      h('p', { class: 'help' }, 'اگر داخل دسته یا سوراخی هنوز پس‌زمینه دیده می‌شود، روی همان نقطه در پیش‌نمایش بزنید تا باز شود (دوباره بزنید تا بسته شود).'),
+      toggle('باز نگه‌داشتن همه‌ی سوراخ‌ها', () => S.keepHoles, (v) => { S.keepHoles = v; if (S.gc) { applyBox(); render(); } }),
+      h('p', { class: 'help' }, 'پیشنهادی برای عکس‌های شلوغ. کادر را نزدیک محصول و کمی بزرگ‌تر از آن بکشید؛ هرچه پس‌زمینه‌ی کمتری داخل کادر باشد، نتیجه بهتر است.'));
     const ai = h('div', { class: S.method === 'ai' ? '' : 'hide' }, h('div', { class: 'btnrow' }, aiBtn), h('p', { class: 'help' }, 'آزمایشی: برای پس‌زمینه‌های شلوغ. اینترنت لازم است و بار اول چند ده مگابایت دانلود می‌شود. عکس روی گوشی پردازش می‌شود.'));
     ctl.replaceChildren(...[
-      row('حذف پس‌زمینه', seg([['simple', 'ساده'], ['ai', 'هوشمند'], ['none', 'بدون حذف']], () => S.method, (k) => { S.method = k; S.picking = false; drawCtl(); render(); }, 'روش حذف پس‌زمینه'), S.method === 'simple' ? 'مناسب عکس روی دیوار، میز یا کاغذ یک‌رنگ.' : null),
-      simple, ai,
+      row('حذف پس‌زمینه', seg([['box', 'با کادر'], ['simple', 'ساده'], ['ai', 'هوشمند'], ['none', 'بدون حذف']], () => S.method, (k) => { S.method = k; S.picking = false; drawCtl(); render(); }, 'روش حذف پس‌زمینه'), S.method === 'simple' ? 'فقط برای عکس روی دیوار، میز یا کاغذ یک‌رنگ.' : null),
+      boxc, simple, ai,
       row('نسبت تصویر', seg([['1:1', 'مربع'], ['4:5', 'عمودی ۴:۵'], ['orig', 'اصلی']], () => S.ratio, (k) => { S.ratio = k; render(); }, 'نسبت تصویر')),
       row('حاشیه دور محصول', range(0, 25, () => S.pad, (v) => { S.pad = v; rerender(); }, 'حاشیه')),
       row('پس‌زمینه‌ی جدید', seg([['white', 'سفید'], ['gray', 'خاکستری'], ['color', 'رنگی'], ['none', 'شفاف']], () => S.bgm, (k) => { S.bgm = k; drawCtl(); render(); }, 'پس‌زمینه‌ی جدید')),
