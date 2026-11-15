@@ -5,7 +5,7 @@ import { renderField, presetsBlock, paletteStrip } from './fields.js';
 import { mountProducts, saveCurrent, isDirty } from './products.js';
 import { openStudio } from './photo.js';
 
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 const root = $('#app');
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);

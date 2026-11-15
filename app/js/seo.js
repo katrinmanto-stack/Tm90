@@ -27,14 +27,54 @@ export function clip(s, max) {
   return (sp > max * 0.6 ? cut.slice(0, sp) : cut).trim() + '…';
 }
 
-/** پیشنهاد خودکار عنوان و توضیح متا (بدون هوش مصنوعی؛ فقط از داده‌ی خود محصول). */
-export function suggest(p, siteName = '') {
-  const name = String(p.name || '').trim();
-  const title = name ? clip(len(name) <= 45 && siteName ? `${name} | ${siteName}` : name, 60) : '';
-  const base = stripHtml(p.short_description) || stripHtml(p.description);
-  const desc = base ? clip(base, 155) : (name ? clip(`خرید آنلاین ${name}${siteName ? ' از ' + siteName : ''}`, 155) : '');
-  return { title, desc };
+const FILLER = new Set(['و', 'با', 'برای', 'از', 'در', 'به', 'را', 'که', 'این', 'آن', 'یک']);
+const STOP_AT = new Set(['مدل', 'سری', 'کد', 'طرح']);
+
+/** کلمه‌ی کلیدی اصلی از اسم محصول: ۲ کلمه‌ی اول (۳ کلمه اگر اسم کوتاه باشد)، تا رسیدن به «مدل/سری/کد» یا کد عددی */
+export function extractKeyword(name) {
+  const head = [];
+  for (const t of String(name ?? '').replace(/[()،,:;|«»"“”]/g, ' ').split(/\s+/).filter(Boolean)) {
+    if (FILLER.has(t)) continue;
+    if (head.length && (STOP_AT.has(t) || /[0-9۰-۹٠-٩]/.test(t))) break;
+    head.push(t);
+  }
+  let kw = head.slice(0, head.length <= 3 ? 3 : 2).join(' ').trim();
+  if (len(kw) > 40) kw = head.slice(0, 2).join(' ');
+  return kw;
 }
+const slugOf = (kw) => String(kw || '').toLowerCase().replace(/\u200c/g, '-').split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}-]+/gu, '')).filter(Boolean).join('-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+const sentences = (t) => stripHtml(t).replace(/([.!؟?۔])\s+/g, '$1\n').split('\n').map((x) => x.trim()).filter((x) => len(x) >= 8);
+
+/**
+ * ساخت خودکار سئو فقط از داده‌ی خود محصول (قاعده‌ای، رایگان، آفلاین؛ بدون هوش مصنوعی).
+ * p: { name, kw?, short_description, description }؛ خروجی: { kw, title, desc, slug, alts:{main, gallery(i)} }
+ */
+export function autoSeo(p, { siteName = '', category = '' } = {}) {
+  const name = String(p.name || '').trim(), site = String(siteName || '').trim();
+  const alts = { main: name, gallery: (i) => `${name} - تصویر ${i + 2}` };
+  if (!name) return { kw: '', title: '', desc: '', slug: '', alts };
+  const kw = String(p.kw || '').trim() || extractKeyword(name);
+  const tail = site ? ` | ${site}` : '';
+  const cands = [`خرید آنلاین ${name}${tail}`, `خرید ${name}${tail}`, `خرید آنلاین ${name}`, `خرید ${name}`, name];
+  let title = cands.find((c) => len(c) >= 30 && len(c) <= 60) || cands.filter((c) => len(c) <= 60).sort((a, b) => len(b) - len(a))[0] || clip(name, 60);
+  if (kw && !has(title, kw)) title = clip(`${kw} | ${name}`, 60);
+
+  let desc = '';
+  for (const sn of [...sentences(p.short_description), ...sentences(p.description)]) {
+    const next = desc ? `${desc} ${sn}` : sn;
+    if (len(next) > 155) { if (!desc) desc = clip(sn, 155); break; }
+    desc = next; if (len(desc) >= 120) break;
+  }
+  if (!desc) desc = category ? `${name} از دسته‌ی ${category}.` : `${name}.`;
+  if (kw && !has(desc, kw)) desc = clip(`${kw}: ${desc}`, 158);
+  for (const c of [site ? `خرید آنلاین ${kw || name} از ${site}.` : `خرید آنلاین ${kw || name}.`, 'همین حالا سفارش دهید.']) {
+    if (len(desc) < 120 && len(`${desc} ${c}`) <= 160) desc = `${desc} ${c}`;
+  }
+  return { kw, title, desc: clip(desc, 160), slug: slugOf(kw), alts };
+}
+
+/** سازگار با نسخه‌ی قبل */
+export function suggest(p, siteName = '') { const r = autoSeo(p, { siteName }); return { title: r.title, desc: r.desc }; }
 
 const LV = { ok: 1, warn: 0.5, bad: 0 };
 

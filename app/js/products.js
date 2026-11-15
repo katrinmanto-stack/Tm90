@@ -1,13 +1,32 @@
 // تب «محصولات»: فهرست، ویرایش، تصاویر و پنل سئو با امتیاز زنده.
 import { h, debounce } from './dom.js';
 import { icon } from './icons.js';
-import { analyze, suggest, gradeLabel, len, clip, stripHtml } from './seo.js';
+import { analyze, autoSeo, gradeLabel, len, clip, stripHtml } from './seo.js';
 
 const P = { meta: null, items: [], total: 0, page: 0, pages: 0, q: '', status: '', loading: false, error: '', token: 0 };
-let host = null, C = null, E = null, listBox = null, bar = null, seoRefs = null;
+let host = null, C = null, E = null, listBox = null, bar = null, seoRefs = null, bulkBtn = null;
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const fmt = (v) => { const n = Math.round(+v || 0); return n ? String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '—'; };
 const seoWritable = () => !!(P.meta && P.meta.seo && P.meta.seo.writable);
+
+const AUTO_KEY = 'bazar_auto_seo';
+const autoOn = () => { try { return localStorage.getItem(AUTO_KEY) !== '0'; } catch { return true; } };
+const setAuto = (on) => { try { localStorage.setItem(AUTO_KEY, on ? '1' : '0'); } catch { /* حافظه در دسترس نیست */ } };
+
+/** فقط موارد خالی را پر می‌کند (overwrite=true همه را بازنویسی می‌کند). فهرست برچسب موارد تغییر‌کرده را برمی‌گرداند. */
+function fillSeo(v, overwrite = false) {
+  if (!v.name.trim()) return [];
+  const cats = (P.meta && P.meta.categories) || [];
+  const category = (cats.find((c) => v.categories.includes(c.id)) || {}).name || '';
+  const a = autoSeo({ name: v.name, kw: overwrite ? '' : v.seo.kw, short_description: v.short_description, description: v.description }, { siteName: C.siteName, category });
+  const changed = [], set = (obj, key, val, label) => { if (val && (overwrite || !String(obj[key] || '').trim())) { obj[key] = val; if (!changed.includes(label)) changed.push(label); } };
+  if (seoWritable()) { set(v.seo, 'kw', a.kw, 'کلمه‌ی کلیدی'); set(v.seo, 'title', a.title, 'عنوان'); set(v.seo, 'desc', a.desc, 'توضیح متا'); }
+  set(v, 'slug', a.slug, 'نامک');
+  let g = 0;
+  if (v.image.id) set(v.image, 'alt', a.alts.main, 'alt تصاویر');
+  for (const img of v.gallery) set(img, 'alt', a.alts.gallery(g++), 'alt تصاویر');
+  return changed;
+}
 
 export const isDirty = () => !!E && JSON.stringify(E.v) !== E.base;
 
@@ -51,7 +70,8 @@ function renderList() {
   host.replaceChildren(
     h('section', { class: 'card phead' }, search,
       h('div', { class: 'prow-chips' }, chip('', 'همه'), chip('publish', 'منتشرشده'), chip('draft', 'پیش‌نویس')),
-      h('button', { type: 'button', class: 'btn primary', onclick: () => openEdit(null) }, icon('plus', 18), 'محصول جدید')),
+      h('button', { type: 'button', class: 'btn primary', onclick: () => openEdit(null) }, icon('plus', 18), 'محصول جدید'),
+      seoWritable() ? (bulkBtn = h('button', { type: 'button', class: 'btn ghost', onclick: bulkSeo }, icon('wand', 18), 'تکمیل خودکار سئوی محصولات ناقص')) : null),
     listBox);
   drawList();
 }
@@ -263,13 +283,17 @@ function seoCard() {
   const inKw = inp(() => seo.kw, (x) => { seo.kw = x; touch(); }, { max: 80, label: 'کلمه‌ی کلیدی اصلی', ph: 'مثلاً مانتو کتان تابستانی' });
   const inSlug = inp(() => v.slug, (x) => { v.slug = x; touch(); }, { max: 120, label: 'نامک', ph: 'نشانی کوتاه محصول' });
 
+  const rerender = (note) => { const y = scrollY; renderEdit(); scrollTo(0, y); C.toast(note, 'ok'); };
   const auto = h('button', { type: 'button', class: 'btn sm', onclick: () => {
-    const s = suggest({ name: v.name, short_description: v.short_description, description: v.description }, C.siteName || '');
-    if (writable && !seo.title) { seo.title = s.title; inTitle.value = s.title; }
-    if (writable && !seo.desc) { seo.desc = s.desc; inDesc.value = s.desc; }
-    if (!v.slug && v.name.trim()) { v.slug = v.name.trim().split(/\s+/).slice(0, 6).join('-'); inSlug.value = v.slug; }
-    touch(); C.toast('موارد خالی با پیشنهاد خودکار پر شد؛ پیش از ذخیره ویرایش کنید.', 'ok');
-  } }, icon('wand', 18), 'پر کردن خودکار');
+    if (!v.name.trim()) { C.toast('اول نام محصول را بنویسید.', 'bad'); return; }
+    const ch = fillSeo(v, false); touch();
+    rerender(ch.length ? `پر شد: ${ch.join('، ')}. پیش از ذخیره می‌توانید ویرایش کنید.` : 'همه‌ی موارد پر است؛ چیزی تغییر نکرد.');
+  } }, icon('wand', 18), 'پر کردن خودکار سئو');
+  const redo = h('button', { type: 'button', class: 'btn sm ghost', onclick: () => {
+    if (!v.name.trim()) { C.toast('اول نام محصول را بنویسید.', 'bad'); return; }
+    if (!confirm('همه‌ی موارد سئو از نو ساخته شود؟ (نامک و موارد نوشته‌شده‌ی شما هم عوض می‌شود)')) return;
+    const keepSlug = v.slug; fillSeo(v, true); if (E.id) v.slug = keepSlug; touch(); rerender('سئو از نو ساخته شد.');
+  } }, 'ساخت دوباره‌ی همه');
 
   card.append(...[driverNote, scoreBox,
     h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'پیش‌نمایش در گوگل'), serpBox),
@@ -278,7 +302,8 @@ function seoCard() {
     writable ? fld('کلمه‌ی کلیدی اصلی', inKw, 'تحلیل پایین بر اساس همین کلمه انجام می‌شود.') : null,
     fld('نامک (نشانی محصول)', inSlug, 'کوتاه و شامل کلمه‌ی کلیدی؛ فاصله‌ها به خط‌تیره تبدیل می‌شوند.'),
     writable && meta && meta.seo.noindex ? toggleRow('مخفی از گوگل (noindex)', 'فقط برای محصولاتی که نمی‌خواهید در گوگل دیده شوند.', () => seo.noindex, (x) => { seo.noindex = x; touch(); }) : null,
-    h('div', { class: 'btnrow' }, auto),
+    writable ? toggleRow('پر کردن خودکار سئو هنگام ذخیره', 'فقط موارد خالی پر می‌شود و آنچه خودتان نوشته‌اید عوض نمی‌شود.', autoOn, setAuto) : null,
+    h('div', { class: 'btnrow' }, auto, redo),
     h('h3', { class: 'sub-h' }, 'بررسی سئو'), listEl].filter(Boolean));
   seoRefs = { scoreBox, serpBox, listEl, tCnt, dCnt };
   return card;
@@ -338,6 +363,8 @@ function payload(v) {
 export async function saveCurrent() {
   if (!E || E.busy) return;
   if (!E.v.name.trim()) { C.toast('نام محصول را وارد کنید.', 'bad'); return; }
+  let auto = [];
+  if (autoOn() && P.meta) auto = fillSeo(E.v, false);
   E.busy = true; updateBar();
   try {
     const route = E.id ? `/bazar/v1/products/${E.id}` : '/bazar/v1/products';
@@ -346,7 +373,7 @@ export async function saveCurrent() {
     E.id = r.id; E.v = fromServer(r); E.base = JSON.stringify(E.v);
     const i = P.items.findIndex((x) => x.id === r.id);
     if (i >= 0) P.items[i] = r; else { P.items.unshift(r); P.total += 1; }
-    C.toast(created ? 'محصول ساخته شد' : 'تغییرات محصول ذخیره شد', 'ok');
+    C.toast((created ? 'محصول ساخته شد' : 'تغییرات محصول ذخیره شد') + (auto.length ? ` · سئو خودکار پر شد: ${auto.join('، ')}` : ''), 'ok');
     renderEdit();
   } catch (e) { C.toast(e.message, 'bad'); }
   finally { if (E) { E.busy = false; updateBar(); } }
@@ -359,4 +386,22 @@ async function remove() {
     P.items = P.items.filter((x) => x.id !== E.id); P.total = Math.max(0, P.total - 1);
     E = null; C.toast('به زباله‌دان منتقل شد', 'ok'); renderList();
   } catch (e) { C.toast(e.message, 'bad'); }
+}
+
+/** سئوی خالی همه‌ی محصولات ناقص را پر می‌کند؛ موارد نوشته‌شده و نشانی (نامک) محصولات موجود دست نمی‌خورد. */
+async function bulkSeo() {
+  if (!confirm('عنوان، توضیح متا و کلمه‌ی کلیدی خالی همه‌ی محصولات ناقص خودکار پر شود؟\n(آنچه قبلاً نوشته‌اید و نشانی محصولات تغییر نمی‌کند.)')) return;
+  const label = bulkBtn ? bulkBtn.lastChild : null, set = (t) => { if (bulkBtn) { bulkBtn.disabled = true; if (label) label.textContent = t; } };
+  try {
+    while (P.page < P.pages) { set('در حال خواندن فهرست…'); await loadList(false); }
+    const todo = P.items.filter((p) => !p.seo_set); let done = 0, changed = 0;
+    for (const it of todo) {
+      set(`در حال تکمیل ${done + 1} از ${todo.length}…`);
+      const full = await C.call(`/bazar/v1/products/${it.id}`), v = fromServer(full);
+      if (fillSeo(v, false).length) { const r = await C.call(`/bazar/v1/products/${it.id}`, { method: 'POST', body: payload(v) }); const i = P.items.findIndex((x) => x.id === it.id); if (i >= 0) P.items[i] = r; changed++; }
+      done++;
+    }
+    C.toast(todo.length ? `سئوی ${changed} محصول تکمیل شد.` : 'همه‌ی محصولات سئوی کامل دارند.', 'ok');
+  } catch (e) { C.toast(e.message, 'bad'); }
+  finally { if (!E) renderList(); }
 }
