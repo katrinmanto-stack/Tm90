@@ -1,31 +1,34 @@
-name: Extract Sungold Store
-
+name: Unzip
 on:
   workflow_dispatch:
-
+  push:
+    paths:
+      - '*.zip'
 permissions:
   contents: write
-
 jobs:
   unzip:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Extract ZIP
+      - uses: actions/checkout@v4
+      - name: Extract and commit
         run: |
-          set -e
-          mkdir -p /tmp/sungold
-          unzip -q sungold-store-v4.zip -d /tmp/sungold
-          cp -a /tmp/sungold/. .
-          rm sungold-store-v4.zip
-
-      - name: Commit Changes
-        run: |
+          for z in *.zip; do
+            [ -e "$z" ] || exit 0
+            mkdir /tmp/x
+            unzip -q "$z" -d /tmp/x
+            d=/tmp/x
+            n=$(ls -A /tmp/x | wc -l)
+            if [ "$n" -eq 1 ] && [ -d "/tmp/x/$(ls -A /tmp/x)" ]; then
+              d="/tmp/x/$(ls -A /tmp/x)"
+            fi
+            cp -a "$d"/. .
+            git rm -q "$z"
+            rm -rf /tmp/x
+          done
+          rm -rf __MACOSX
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add -A
-          git commit -m "Extract Sungold Store v4" || echo "No changes"
+          git commit -m "Unzip project" || exit 0
           git push
