@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<!-- این صفحه فقط داخل iframe ایزوله (sandbox بدون allow-same-origin) باز می‌شود؛ به رمز و تنظیمات اپ دسترسی ندارد. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://staticimgly.com; worker-src blob: https://cdn.jsdelivr.net https://staticimgly.com; connect-src https://cdn.jsdelivr.net https://staticimgly.com blob: data:; img-src blob: data:">
+<title>موتور حذف پس‌زمینه</title>
+</head>
+<body>
+<script type="module">
+// کتابخانه‌ی متن‌باز @imgly/background-removal (اجرا روی خود دستگاه). نسخه و آدرس را در صورت نیاز این‌جا عوض کنید.
+const LIB = 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.8/+esm';
+let lib = null;
+const post = (m) => parent.postMessage(m, '*');
+addEventListener('message', async (e) => {
+  const m = e.data || {};
+  if (m.type !== 'run' || !(m.blob instanceof Blob)) return;
+  try {
+    if (!lib) { post({ type: 'progress', id: m.id, text: 'در حال دانلود موتور هوشمند…' }); lib = await import(LIB); }
+    const out = await lib.removeBackground(m.blob, {
+      output: { format: 'image/png' },
+      progress: (key, cur, tot) => post({ type: 'progress', id: m.id, text: (String(key).startsWith('fetch') ? 'دانلود مدل: ' : 'پردازش: ') + (tot ? Math.round((cur / tot) * 100) + '٪' : '') }),
+    });
+    post({ type: 'done', id: m.id, blob: out });
+  } catch (err) {
+    post({ type: 'error', id: m.id, message: 'حذف هوشمند انجام نشد (' + ((err && err.message) || 'خطای نامشخص') + '). روش «ساده» را امتحان کنید.' });
+  }
+});
+post({ type: 'ready' });
+</script>
+</body>
+</html>

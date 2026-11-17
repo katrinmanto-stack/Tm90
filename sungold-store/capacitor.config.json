@@ -1,0 +1,18 @@
+{
+  "appId": "store.sungold.admin",
+  "appName": "Sungold",
+  "webDir": "app",
+  "backgroundColor": "#171E52",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#171E52",
+    "adjustMarginsForEdgeToEdge": "auto"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
