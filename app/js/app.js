@@ -3,9 +3,10 @@ import { icon } from './icons.js';
 import { loadConn, saveConn, clearConn, connect, call, uploadImage } from './api.js';
 import { renderField, presetsBlock, paletteStrip } from './fields.js';
 import { mountProducts, saveCurrent, isDirty } from './products.js';
+import { mountOrders, startOrderWatch, reloadOrders, isOrderDirty } from './orders.js';
 import { openStudio } from './photo.js';
 
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.5.0';
 const root = $('#app');
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -112,27 +113,30 @@ function viewMain() {
       pane),
     h('div', { class: 'bar', id: 'bar' }));
   drawGroups(); renderForm(); updateBar();
-  if (S.tab === 'products') setTab('products'); else if (wide()) schedulePreview(true);
+  if (S.tab === 'products' || S.tab === 'orders') setTab(S.tab); else if (wide()) schedulePreview(true);
+  watchOrders();
 }
 
 /* ---------- تب‌های اصلی: ظاهر قالب | محصولات ---------- */
-const prodCtx = () => ({ call: (route, opts) => call(S.conn, route, opts), upload: (f) => uploadImage(S.conn, f), toast, studio: (file, onUse) => openStudio({ toast }, file, { onUse }), siteName: S.site.name, siteUrl: S.site.url, woocommerce: S.site.woocommerce !== false });
+const prodCtx = () => ({ badge: (n) => setOrderBadge(n), call: (route, opts) => call(S.conn, route, opts), upload: (f) => uploadImage(S.conn, f), toast, studio: (file, onUse) => openStudio({ toast }, file, { onUse }), siteName: S.site.name, siteUrl: S.site.url, woocommerce: S.site.woocommerce !== false });
 function tabsNav() {
   const t = (id, label, ic) => h('button', { type: 'button', role: 'tab', 'data-tab': id, class: S.tab === id ? 'on' : '', 'aria-selected': String(S.tab === id), onclick: () => setTab(id) }, icon(ic, 18), label);
-  return h('nav', { class: 'apptabs', role: 'tablist', 'aria-label': 'بخش‌های اپ' }, t('look', 'ظاهر', 'palette'), t('banners', 'بنرها', 'image'), t('products', 'محصولات', 'box'));
+  return h('nav', { class: 'apptabs', role: 'tablist', 'aria-label': 'بخش‌های اپ' }, t('look', 'ظاهر', 'palette'), t('banners', 'بنرها', 'image'), t('products', 'محصولات', 'box'), t('orders', 'سفارشات', 'receipt'));
 }
 function syncTabs() {
   document.querySelectorAll('[data-tab]').forEach((b) => { const on = b.dataset.tab === S.tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
 }
+const fullTab = (t) => t === 'products' || t === 'orders';
 function setTab(t) {
   S.tab = t;
   if (t === 'banners') S.group = 'home';
-  const shell = $('.shell'); if (shell) shell.classList.toggle('mode-products', t === 'products');
-  document.body.classList.toggle('pmode', t === 'products');
-  const bar = $('#bar'); if (bar) bar.hidden = t === 'products';
+  const shell = $('.shell'); if (shell) shell.classList.toggle('mode-products', fullTab(t));
+  document.body.classList.toggle('pmode', fullTab(t));
+  const bar = $('#bar'); if (bar) bar.hidden = fullTab(t);
   syncTabs();
   if (t !== 'banners') window.scrollTo({ top: 0 });
   if (t === 'products') mountProducts($('#form'), prodCtx());
+  else if (t === 'orders') mountOrders($('#form'), prodCtx());
   else {
     drawGroups(); renderForm(); updateBar(); schedulePreview(true);
     if (t === 'banners') requestAnimationFrame(() => { const el = $('.field[data-key=banners]'); if (el) { const top = el.getBoundingClientRect().top + scrollY - 130; window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' }); } });
@@ -225,7 +229,7 @@ function setPvState(t) { if (!pvstate) return; pvstate.textContent = t; pvstate.
 
 function schedulePreview(now) {
   clearTimeout(S.previewTimer);
-  if (S.tab === 'products' || !previewVisible()) return;
+  if (fullTab(S.tab) || !previewVisible()) return;
   S.previewTimer = setTimeout(refreshPreview, now ? 0 : 900);
 }
 async function refreshPreview() {
@@ -265,12 +269,29 @@ function openSettings() {
   document.body.append(sheet);
 }
 
+/* ================= سفارش‌های تازه: شمارنده‌ی روی تب + پیام ================= */
+function setOrderBadge(n) {
+  const b = document.querySelector('[data-tab=orders]'); if (!b) return;
+  let el = b.querySelector('.tbadge');
+  if (!n) { if (el) el.remove(); return; }
+  if (!el) { el = h('b', { class: 'tbadge', 'aria-label': 'سفارش در انتظار پردازش' }); b.append(el); }
+  el.textContent = n > 99 ? '۹۹+' : new Intl.NumberFormat('fa-IR').format(n);
+}
+function watchOrders() {
+  if (S.stopWatch) { S.stopWatch(); S.stopWatch = null; }
+  if (S.site.woocommerce === false) return;
+  S.stopWatch = startOrderWatch((route, opts) => call(S.conn, route, opts), {
+    onCount: setOrderBadge,
+    onNew: (i) => { toast(i && i.request ? 'درخواست خرید جدید رسید' : 'سفارش جدید رسید', 'ok'); if (S.tab === 'orders') reloadOrders(); },
+  });
+}
+
 /* ================= راه‌اندازی ================= */
 async function boot() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
   addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.install = e; });
-  addEventListener('beforeunload', (e) => { if (S.schema && (dirtyKeys().length || isDirty())) { e.preventDefault(); e.returnValue = ''; } });
-  addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && S.schema) { e.preventDefault(); if (S.tab === 'products') saveCurrent(); else save(); } });
+  addEventListener('beforeunload', (e) => { if (S.schema && (dirtyKeys().length || isDirty() || isOrderDirty())) { e.preventDefault(); e.returnValue = ''; } });
+  addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && S.schema) { e.preventDefault(); if (S.tab === 'products') saveCurrent(); else if (!fullTab(S.tab)) save(); } });
 
   const c = loadConn();
   if (!c) return viewConnect();

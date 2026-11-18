@@ -1,12 +1,12 @@
 <?php
 if (!defined('ABSPATH')) exit;
-define('BAZAR_V', '4.0.0');
+define('BAZAR_V', '4.8.0');
 
 /*
  * ماژول‌های تنظیمات (inc/): هر کدام جداگانه و امن بارگذاری می‌شوند؛
  * اگر یکی خطا داشت (مثلاً سینتکس)، قالب با تنظیمات پیش‌فرض کار می‌کند و سایت سفید نمی‌شود.
  */
-foreach (array('settings', 'rest', 'customizer') as $bz_part) {
+foreach (array('settings', 'rest', 'customizer', 'extras', 'products', 'orders', 'requests') as $bz_part) {
   $bz_file = get_template_directory() . '/inc/' . $bz_part . '.php';
   if (!is_readable($bz_file)) continue;
   try {
@@ -126,12 +126,14 @@ add_action('widgets_init', function () {
 });
 
 add_action('wp_enqueue_scripts', function () {
+  if (bazar_on('gfonts')) wp_enqueue_style('bazar-gfonts', 'https://fonts.googleapis.com/css2?family=Lalezar&family=Vazirmatn:wght@100..900&display=swap', [], null);
   wp_enqueue_style('bazar', get_stylesheet_uri(), [], BAZAR_V);
   wp_enqueue_script('bazar', get_template_directory_uri().'/assets/main.js', [], BAZAR_V, true);
 }, 20);
 
 add_action('wp_head', function () {
   echo '<script>if(/BazarApp/.test(navigator.userAgent))document.documentElement.classList.add("in-app")</script>';
+  if (bazar_on('gfonts')) echo '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>';
   foreach (['Vazirmatn-Variable.woff2','Lalezar-Regular.woff2'] as $f)
     if (file_exists(get_template_directory().'/assets/fonts/'.$f)) echo '<link rel="preload" href="'.esc_url(get_template_directory_uri().'/assets/fonts/'.$f).'" as="font" type="font/woff2" crossorigin>';
 }, 1);
@@ -145,7 +147,7 @@ add_action('wp_footer', function () {
   if (!function_exists('is_product') || !is_product() || !bazar_on('sticky_atc')) return;
   $p = wc_get_product(get_queried_object_id());
   if (!$p) return;
-  echo '<div class="satc" hidden><div class="wrap"><span class="satc-t">'.esc_html($p->get_name()).'</span><span>'.wp_kses_post($p->get_price_html()).'</span><button class="btn" data-atc type="button">افزودن به سبد</button></div></div>';
+  echo '<div class="satc" hidden><div class="wrap"><span class="satc-t">'.esc_html($p->get_name()).'</span><span>'.wp_kses_post($p->get_price_html()).'</span><button class="btn" data-atc type="button">'.esc_html(bazar_or('atc_label', 'افزودن به سبد')).'</button></div></div>';
 });
 
 add_action('after_switch_theme', function () {

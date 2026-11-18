@@ -85,4 +85,12 @@
       if (btn && !btn.disabled && !btn.classList.contains('disabled')) btn.click(); else form.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   }
+
+  // ظهور نرم بخش‌های پایین صفحه هنگام اسکرول (فقط وقتی «جلوه‌ها» روشن باشد؛ بدون جاوااسکریپت همه‌چیز دیده می‌شود)
+  if (b.classList.contains('bz-fx') && 'IntersectionObserver' in window && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    var blocks = [].slice.call(d.querySelectorAll('main > section, main > .wrap, .feat, .ft-g')).filter(function (el) { return el.getBoundingClientRect().top > innerHeight * 0.92; });
+    var io = new IntersectionObserver(function (en) { en.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }); }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+    blocks.forEach(function (el) { el.classList.add('rv'); io.observe(el); });
+    setTimeout(function () { blocks.forEach(function (el) { el.classList.add('in'); }); }, 6000);
+  }
 })();

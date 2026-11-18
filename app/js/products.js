@@ -111,7 +111,7 @@ const blank = () => ({
 
 function fromServer(p) {
   return {
-    name: p.name || '', slug: p.slug || '', status: p.status === 'publish' ? 'publish' : 'draft',
+    name: p.name || '', slug: p.slug || '', status: ['publish', 'draft', 'pending', 'private'].includes(p.status) ? p.status : 'draft',
     short_description: p.short_description || '', description: p.description || '', sku: p.sku || '',
     regular_price: p.regular_price || '', sale_price: p.sale_price || '',
     manage_stock: !!p.manage_stock, stock_quantity: p.stock_quantity == null ? 0 : p.stock_quantity, stock_status: p.stock_status || 'instock',

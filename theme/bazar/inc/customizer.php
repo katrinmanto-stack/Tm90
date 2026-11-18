@@ -16,7 +16,7 @@ function bazar_customize_register($wp_customize) {
   $made = array();
   foreach ($schema['fields'] as $f) {
     $type = isset($f['type']) ? $f['type'] : 'text';
-    $skip = array('image', 'sections', 'benefits');
+    $skip = array('image', 'sections', 'benefits', 'banners', 'menu');
     if (!empty($f['store']) || in_array($type, $skip, true)) continue;
 
     $gid = $f['group'];

@@ -71,6 +71,15 @@ function bazar_saved_value($f) {
   if (strpos($store, 'mod:') === 0)    return get_theme_mod(substr($store, 4), $def);
   $all = get_option('bazar_settings', array());
   if (is_array($all) && array_key_exists($key, $all)) return $all[$key];
+  if ($key === 'banners' && is_array($all)) { // مهاجرت از نسخه‌ی ۴.۰.۱ (سه بنر ثابت)
+    $old = array();
+    for ($i = 1; $i <= 3; $i++) {
+      if (!empty($all['banner' . $i . '_img'])) {
+        $old[] = array('img' => (int) $all['banner' . $i . '_img'], 'link' => isset($all['banner' . $i . '_url']) ? (string) $all['banner' . $i . '_url'] : '', 'alt' => '', 'on' => true);
+      }
+    }
+    if ($old) return $old;
+  }
   $legacy = get_theme_mod('bazar_' . $key, null); // قالب‌های قبل از 4.0
   if ($legacy !== null && $legacy !== false) return $legacy;
   return $def;
@@ -194,6 +203,42 @@ function bazar_clean($f, $v) {
         }
       }
       return $out ? $out : $def;
+
+    case 'banners':
+      $out = array();
+      if (is_array($v)) {
+        foreach ($v as $row) {
+          if (!is_array($row)) continue;
+          $img = isset($row['img']) ? $row['img'] : 0;
+          if (is_array($img) && isset($img['id'])) $img = $img['id'];
+          $id = (int) $img;
+          if ($id <= 0 || !wp_attachment_is_image($id)) continue;
+          $alt = isset($row['alt']) && is_scalar($row['alt']) ? (string) $row['alt'] : '';
+          $out[] = array(
+            'img'  => $id,
+            'link' => bazar_clean(array('type' => 'link'), isset($row['link']) ? $row['link'] : ''),
+            'alt'  => bazar_trim_to(sanitize_text_field($alt), 100),
+            'on'   => !array_key_exists('on', $row) || !empty($row['on']),
+          );
+          if (count($out) >= 8) break;
+        }
+      }
+      return $out;
+
+    case 'menu':
+      $out = array();
+      if (is_array($v)) {
+        foreach ($v as $row) {
+          if (!is_array($row)) continue;
+          $title = isset($row['title']) && is_scalar($row['title']) ? bazar_trim_to(sanitize_text_field((string) $row['title']), 40) : '';
+          $url   = bazar_clean(array('type' => 'link'), isset($row['url']) ? $row['url'] : '');
+          if ($title === '' || $url === '') continue;
+          $out[] = array('title' => $title, 'url' => $url, 'on' => !array_key_exists('on', $row) || !empty($row['on']));
+          $mx = isset($f['max']) ? (int) $f['max'] : 10;
+          if (count($out) >= $mx) break;
+        }
+      }
+      return $out;
 
     case 'sections':
       $ids = array();
@@ -379,6 +424,81 @@ function bazar_home_order() {
   return $out;
 }
 
+/** آدرس نهایی یک آیتم منو (مسیر نسبی نسبت به آدرس سایت ساخته می‌شود). */
+function bazar_nav_href($u) {
+  return (isset($u[0]) && $u[0] === '/') ? home_url($u) : $u;
+}
+
+/** منوی قابل‌تنظیم از اپ ($key = نام فیلد). اگر آیتمی تعریف نشده باشد منوی وردپرس ($location) یا منوی پیش‌فرض نمایش داده می‌شود. */
+function bazar_nav_render($key = 'nav_items', $location = 'primary') {
+  $fields = bazar_fields();
+  $list   = isset($fields[$key]) ? bazar_clean($fields[$key], bazar_value($key)) : array();
+  if (!$list) {
+    wp_nav_menu(array('theme_location' => $location, 'container' => false, 'depth' => 1, 'fallback_cb' => 'bazar_fallback_menu'));
+    return;
+  }
+  $cur = untrailingslashit((string) wp_parse_url(home_url(add_query_arg(null, null)), PHP_URL_PATH));
+  $out = '';
+  foreach ($list as $it) {
+    if (empty($it['on'])) continue;
+    $href = bazar_nav_href($it['url']);
+    $p    = $it['url'][0] === '#' ? '' : untrailingslashit((string) wp_parse_url($href, PHP_URL_PATH));
+    $here = ($p !== '' && $p === $cur);
+    $ext  = preg_match('#^https?://#i', $it['url']) && wp_parse_url($href, PHP_URL_HOST) !== wp_parse_url(home_url('/'), PHP_URL_HOST);
+    $out .= '<li' . ($here ? ' class="current-menu-item"' : '') . '><a href="' . esc_url($href) . '"' . ($ext ? ' rel="noopener"' : '') . ($here ? ' aria-current="page"' : '') . '>' . esc_html($it['title']) . '</a></li>';
+  }
+  echo $out === '' ? '' : '<ul>' . $out . '</ul>';
+}
+
+function bazar_primary_nav() { bazar_nav_render('nav_items', 'primary'); }
+
+/** آیتم‌های پیشنهادی منو (برای دکمه‌ی «افزودن آیتم‌های پیشنهادی» در اپ). */
+function bazar_nav_defaults() {
+  $home = home_url('/');
+  $rel  = function ($u) use ($home) { return strpos($u, $home) === 0 ? '/' . ltrim(substr($u, strlen($home)), '/') : $u; };
+  $about = '';
+  foreach (array('about', 'about-us', 'aboutus') as $slug) {
+    $pg = get_page_by_path($slug);
+    if ($pg && $pg->post_status === 'publish') { $about = get_permalink($pg); break; }
+  }
+  if ($about === '') {
+    $q = get_posts(array('post_type' => 'page', 'post_status' => 'publish', 'title' => 'درباره ما', 'posts_per_page' => 1, 'no_found_rows' => true));
+    if ($q) $about = get_permalink($q[0]);
+  }
+  $items = array();
+  $shop  = bazar_shop_url();
+  if ($shop) $items[] = array('title' => 'فروشگاه', 'url' => $rel($shop), 'on' => true);
+  if (function_exists('wc_get_cart_url')) $items[] = array('title' => 'سبد خرید', 'url' => $rel(wc_get_cart_url()), 'on' => true);
+  $items[] = array('title' => 'حساب من', 'url' => $rel(bazar_account_url()), 'on' => true);
+  $items[] = array('title' => 'درباره ما', 'url' => $about !== '' ? $rel($about) : '/about/', 'on' => true, 'missing' => $about === '');
+  return $items;
+}
+
+/** اسلایدر بنرهای صفحه اصلی (حداکثر ۸). اگر بنر روشنی نباشد رشته‌ی خالی برمی‌گرداند و هیرو متنی نمایش داده می‌شود. */
+function bazar_banners_html() {
+  $fields = bazar_fields();
+  if (!isset($fields['banners'])) return '';
+  $list = bazar_clean($fields['banners'], bazar_value('banners'));
+  $out  = '';
+  $n    = 0;
+  foreach ($list as $b) {
+    if (empty($b['on'])) continue;
+    $n++;
+    $alt = $b['alt'] !== '' ? $b['alt'] : trim((string) get_post_meta($b['img'], '_wp_attachment_image_alt', true));
+    if ($alt === '') $alt = 'بنر ' . $n;
+    $img = wp_get_attachment_image($b['img'], 'full', false, array(
+      'alt'      => $alt,
+      'loading'  => $n === 1 ? 'eager' : 'lazy',
+      'decoding' => 'async',
+      'fetchpriority' => $n === 1 ? 'high' : 'auto',
+    ));
+    if (!$img) { $n--; continue; }
+    $inner = $b['link'] !== '' ? '<a href="' . esc_url($b['link']) . '">' . $img . '</a>' : $img;
+    $out  .= '<div class="bazar-banner">' . $inner . '</div>';
+  }
+  return $out === '' ? '' : '<div class="bazar-banners" role="region" aria-label="بنرها">' . $out . '</div>';
+}
+
 add_action('after_setup_theme', 'bazar_preview_filters', 20);
 function bazar_preview_filters() {
   $pv = bazar_preview_values();
@@ -404,6 +524,7 @@ add_filter('body_class', 'bazar_body_classes');
 function bazar_body_classes($c) {
   if (!bazar_on('tabbar_on')) $c[] = 'bz-no-tabbar';
   if (!bazar_on('topbar_on')) $c[] = 'bz-no-topbar';
+  if (bazar_on('fx')) $c[] = 'bz-fx';
   if (bazar_opt('shop_columns') === '3') $c[] = 'bz-cols-3';
   return $c;
 }

@@ -7,8 +7,8 @@
     <?php is_singular() ? the_content() : the_excerpt(); ?>
   </article>
 <?php endwhile; the_posts_pagination(); else : ?>
-  <h1 class="page-title">چیزی پیدا نشد</h1>
-  <p>عبارت دیگری را جستجو کنید یا از منو یک دسته را انتخاب کنید.</p>
+  <h1 class="page-title"><?php echo esc_html(bazar_or('notfound_title', 'چیزی پیدا نشد')); ?></h1>
+  <p><?php echo esc_html(bazar_or('notfound_text', 'عبارت دیگری را جستجو کنید یا از منو یک دسته را انتخاب کنید.')); ?></p>
 <?php endif; ?>
 </main>
 <?php get_footer(); ?>

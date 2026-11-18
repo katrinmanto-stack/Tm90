@@ -22,7 +22,7 @@ $rows_n   = max(1, min(4, (int) bazar_or('rows_count', '3')));
 
 function bazar_tile($t, $cls = '') {
   $img = bazar_term_img($t, 'medium_large');
-  echo '<a class="tile'.($img ? ' has-img' : ' '.$cls).'" href="'.esc_url(get_term_link($t)).'"'.($img ? ' style="background-image:url('.esc_url($img).')"' : '').'><b>'.esc_html($t->name).'</b><span>مشاهده محصولات</span></a>';
+  echo '<a class="tile'.($img ? ' has-img' : ' '.$cls).'" href="'.esc_url(get_term_link($t)).'"'.($img ? ' style="background-image:url('.esc_url($img).')"' : '').'><b>'.esc_html($t->name).'</b><span>'.esc_html(bazar_or('tile_sub', 'مشاهده محصولات')).'</span></a>';
 }
 ?>
 <main>
@@ -65,14 +65,14 @@ function bazar_tile($t, $cls = '') {
 <section class="wrap" id="featured" data-sec="featured">
   <div class="sh"><h2><?php echo esc_html($feat_ttl); ?></h2>
     <div class="tabs" role="tablist">
-      <button role="tab" id="tab-new" aria-controls="p-new" aria-selected="true">جدیدترین</button>
-      <button role="tab" id="tab-best" aria-controls="p-best" aria-selected="false">پرفروش‌ها</button>
-      <button role="tab" id="tab-sale" aria-controls="p-sale" aria-selected="false">تخفیف‌دار</button>
+      <button role="tab" id="tab-new" aria-controls="p-new" aria-selected="true"><?php echo esc_html(bazar_or('tab_new', 'جدیدترین')); ?></button>
+      <button role="tab" id="tab-best" aria-controls="p-best" aria-selected="false"><?php echo esc_html(bazar_or('tab_best', 'پرفروش‌ها')); ?></button>
+      <button role="tab" id="tab-sale" aria-controls="p-sale" aria-selected="false"><?php echo esc_html(bazar_or('tab_sale', 'تخفیف‌دار')); ?></button>
     </div>
   </div>
   <div id="p-new" role="tabpanel" aria-labelledby="tab-new"><?php echo do_shortcode('[products limit="'.$feat_n.'" columns="4" orderby="date" order="DESC"]'); ?></div>
   <div id="p-best" role="tabpanel" aria-labelledby="tab-best" hidden><?php echo do_shortcode('[best_selling_products limit="'.$feat_n.'" columns="4"]'); ?></div>
-  <div id="p-sale" role="tabpanel" aria-labelledby="tab-sale" hidden><?php $s = do_shortcode('[sale_products limit="'.$feat_n.'" columns="4"]'); echo $s ? $s : '<p>فعلاً محصول تخفیف‌داری نداریم.</p>'; ?></div>
+  <div id="p-sale" role="tabpanel" aria-labelledby="tab-sale" hidden><?php $s = do_shortcode('[sale_products limit="'.$feat_n.'" columns="4"]'); echo $s ? $s : '<p>' . esc_html(bazar_or('sale_empty', 'فعلاً محصول تخفیف‌داری نداریم.')) . '</p>'; ?></div>
 </section>
 <?php endif; ?>
 
@@ -86,7 +86,7 @@ function bazar_tile($t, $cls = '') {
 <?php if ($sec === 'rows' && $wc) : ?>
 <?php foreach (array_slice($cats, 0, $rows_n) as $c) : ?>
 <section class="wrap">
-  <div class="sh"><h2><?php echo esc_html($c->name); ?></h2><a href="<?php echo esc_url(get_term_link($c)); ?>">مشاهده همه</a></div>
+  <div class="sh"><h2><?php echo esc_html($c->name); ?></h2><a href="<?php echo esc_url(get_term_link($c)); ?>"><?php echo esc_html(bazar_or('see_all', 'مشاهده همه')); ?></a></div>
   <?php echo do_shortcode('[products category="'.esc_attr($c->slug).'" limit="4" columns="4"]'); ?>
 </section>
 <?php endforeach; ?>

@@ -35,7 +35,7 @@ with sync_playwright() as p:
     # correct
     pg.fill('input[type=password]',PASS); pg.click('button[type=submit]'); pg.wait_for_selector('#form .card')
     check('connected -> settings form rendered', pg.locator('#form .field').count()>=3)
-    check('group chips from schema', pg.locator('.chip').count()==5, str(pg.locator('.chip').count()))
+    check('group chips from schema', pg.locator('.chip').count()==8, str(pg.locator('.chip').count()))
     wait_preview(pg)
     check('live preview iframe loaded with token', 'bazar_preview=' in pg.get_attribute('#pvframe','src'))
     pg.screenshot(path=f'{SH}/02-main-brand-desktop.png')

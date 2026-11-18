@@ -19,6 +19,11 @@ const P = {
   external: 'M14 4h6v6M20 4l-9 9M18 14v6H4V6h6',
   monitor: 'M3 4h18v12H3zM8 20h8M12 16v4', phone: 'M7 2h10v20H7zM11 18h2',
   logout: 'M9 4H4v16h5M16 8l4 4-4 4M20 12H9', undo: 'M3 7v6h6M3 13a9 9 0 1 0 3-7',
+  receipt: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3',
+  call: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z',
+  chat: 'M4 5h16v11H9l-5 4z', copy: 'M9 9h11v11H9zM5 15H4V4h11v1', truck: 'M1 6h13v10H1zM14 9h5l3 3v4h-8M6 19a2 2 0 1 0 .01 0M18 19a2 2 0 1 0 .01 0',
+  send: 'M4 12l16-8-6 16-3-6z', pin: 'M12 21s7-6 7-11a7 7 0 1 0-14 0c0 5 7 11 7 11zM12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+  card: 'M3 6h18v12H3zM3 10h18M7 15h4', note: 'M5 3h14v18H5zM9 8h6M9 12h6M9 16h3',
   download: 'M12 3v12M7 10l5 5 5-5M4 20h16', alert: 'M12 3l10 18H2zM12 10v4M12 17.5h.01',
 };
 export function icon(name, size = 22) {

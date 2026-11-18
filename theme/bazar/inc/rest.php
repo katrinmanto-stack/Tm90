@@ -47,6 +47,14 @@ function bazar_present($f, $v) {
     $url = $id ? wp_get_attachment_image_url($id, 'medium') : '';
     return array('id' => $id, 'url' => $url ? $url : '');
   }
+  if (isset($f['type']) && $f['type'] === 'banners') {
+    $out = array();
+    foreach ((array) $v as $b) {
+      $url = wp_get_attachment_image_url($b['img'], 'medium');
+      $out[] = array('img' => array('id' => (int) $b['img'], 'url' => $url ? $url : ''), 'link' => $b['link'], 'alt' => $b['alt'], 'on' => (bool) $b['on']);
+    }
+    return $out;
+  }
   return $v;
 }
 
@@ -65,6 +73,7 @@ function bazar_rest_ping() {
     'theme'         => 'bazar',
     'version'       => defined('BAZAR_V') ? BAZAR_V : '',
     'api'           => 1,
+    'features'      => array('settings', 'products', 'orders', 'requests'),
     'https'         => is_ssl(),
     'woocommerce'   => class_exists('WooCommerce'),
     'app_passwords' => function_exists('wp_is_application_passwords_available') ? wp_is_application_passwords_available() : false,
@@ -85,7 +94,7 @@ function bazar_rest_get() {
   return rest_ensure_response(array(
     'values'  => bazar_rest_values(),
     'palette' => bazar_palette(),
-    'site'    => array('name' => get_bloginfo('name'), 'url' => home_url('/'), 'version' => defined('BAZAR_V') ? BAZAR_V : ''),
+    'site'    => array('name' => get_bloginfo('name'), 'url' => home_url('/'), 'version' => defined('BAZAR_V') ? BAZAR_V : '', 'nav_defaults' => bazar_nav_defaults()),
   ));
 }
 
@@ -157,4 +166,25 @@ function bazar_rest_preview($req) {
     'token'   => $token,
     'expires' => 30 * MINUTE_IN_SECONDS,
   ));
+}
+
+
+/**
+ * CORS برای مسیرهای bazar/v1 تا اپ (origin مثل https://localhost) بتواند درخواست بزند.
+ * بعضی هاست‌ها/افزونه‌ها هدرهای پیش‌فرض وردپرس را حذف می‌کنند.
+ */
+add_filter('rest_pre_serve_request', 'bazar_rest_cors', 20, 4);
+function bazar_rest_cors($served, $result, $request, $server) {
+  $route = $request instanceof WP_REST_Request ? $request->get_route() : '';
+  if (strpos($route, '/bazar/') !== 0) return $served;
+  $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+  $ok = array('https://localhost', 'http://localhost', 'capacitor://localhost', 'ionic://localhost');
+  if ($origin && in_array($origin, $ok, true)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Authorization, Content-Type, Content-Disposition, X-WP-Nonce');
+    header('Access-Control-Max-Age: 600');
+    header('Vary: Origin', false);
+  }
+  return $served;
 }

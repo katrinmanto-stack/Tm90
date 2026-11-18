@@ -6,7 +6,7 @@ export const saveConn = (c) => localStorage.setItem(KEY, JSON.stringify(c));
 export const clearConn = () => localStorage.removeItem(KEY);
 
 export class ApiError extends Error {
-  constructor(message, { status = 0, code = '' } = {}) { super(message); this.status = status; this.code = code; }
+  constructor(message, { status = 0, code = '', data = null } = {}) { super(message); this.status = status; this.code = code; this.data = data; }
 }
 
 export function normalizeSite(input) {
@@ -58,7 +58,7 @@ export async function call(conn, route, { method = 'GET', body, auth = true, que
   if (!res.ok) {
     let msg = MESSAGES[res.status] || (data && data.message) || `خطای سرور (${res.status})`;
     if (res.status === 404 && route.startsWith('/bazar/')) msg = 'قالب بازار نسخه‌ی ۴ روی این سایت فعال نیست (یا پیوند یکتا مشکل دارد).';
-    throw new ApiError(msg, { status: res.status, code: (data && data.code) || '' });
+    throw new ApiError(msg, { status: res.status, code: (data && data.code) || '', data: (data && data.data) || null });
   }
   if (data === null) throw new ApiError('پاسخ نامعتبر از سایت (احتمالاً REST API مسدود یا ریدایرکت شده).', { status: res.status, code: 'bad_response' });
   return data;

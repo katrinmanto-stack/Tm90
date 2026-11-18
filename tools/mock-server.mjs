@@ -8,6 +8,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { derive, hex6 } from '../app/js/color.js';
+import { productsApi } from './mock-products.mjs';
+import { ordersApi } from './mock-orders.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const schema = JSON.parse(fs.readFileSync(path.join(ROOT, 'theme/bazar/inc/schema.json'), 'utf8'));
@@ -20,6 +22,8 @@ let nextId = 100;
 const defaults = () => Object.fromEntries(schema.fields.map((f) => [f.key, f.default]));
 let saved = { ...defaults(), site_title: 'Sungold store', phone: '09121234567' };
 const previews = new Map();
+const prodApi = productsApi({ media, port: +process.env.PORT || 8787 });
+const ordApi = ordersApi();
 
 /* ---------- هم‌ارز bazar_clean ---------- */
 const trim = (s, n) => String(s ?? '').slice(0, n);
@@ -37,11 +41,13 @@ function clean(f, v) {
     case 'url': { let u = String(v ?? '').trim(); if (!u) return ''; if (f.prefix && !/^https?:\/\//i.test(u) && /^@?[A-Za-z0-9._]{2,64}$/.test(u)) u = f.prefix + u.replace(/^@/, ''); return /^https?:\/\//i.test(u) ? u : ''; }
     case 'link': { const u = String(v ?? '').trim(); if (!u) return ''; if (u[0] === '#') return '#' + u.slice(1).replace(/[^A-Za-z0-9_-]/g, ''); if (u[0] === '/' && u[1] !== '/') return u; return /^https?:\/\//i.test(u) ? u : ''; }
     case 'benefits': { const out = []; for (const r of Array.isArray(v) ? v : []) { const t = trim(r && r.title, 40).trim(); if (!t) continue; out.push({ title: t, text: trim(r.text, 80) }); if (out.length >= 4) break; } return out.length ? out : f.default; }
+    case 'banners': { const out = []; for (const r of Array.isArray(v) ? v : []) { const id = +((r && r.img && r.img.id !== undefined) ? r.img.id : (r && r.img)) || 0; if (!media.has(id)) continue; const lk = String(r.link ?? '').trim(); out.push({ img: id, link: ((lk[0] === '/' && lk[1] !== '/') || /^https?:\/\//i.test(lk) || lk[0] === '#') ? lk : '', alt: trim(String(r.alt ?? '').replace(/<[^>]*>/g, ''), 100), on: r.on !== false }); if (out.length >= (f.max || 8)) break; } return out; }
+    case 'menu': { const out = []; for (const r of Array.isArray(v) ? v : []) { const title = trim(String((r && r.title) ?? '').replace(/<[^>]*>/g, ''), 40).trim(); const u = String((r && r.url) ?? '').trim(); const url = ((u[0] === '/' && u[1] !== '/') || /^https?:\/\//i.test(u) || u[0] === '#') ? u : ''; if (!title || !url) continue; out.push({ title, url, on: r.on !== false }); if (out.length >= (f.max || 10)) break; } return out; }
     case 'sections': { const ids = f.options.map((o) => o[0]); const seen = new Set(), out = []; for (const r of Array.isArray(v) ? v : []) { if (!r || !ids.includes(r.id) || seen.has(r.id)) continue; seen.add(r.id); out.push({ id: r.id, on: !!r.on }); } for (const id of ids) if (!seen.has(id)) out.push({ id, on: true }); return out; }
     default: return trim(String(v ?? '').replace(/<[^>]*>/g, ''), max);
   }
 }
-const present = (f, v) => f.type === 'image' ? { id: +v || 0, url: +v ? `/media/${v}` : '' } : v;
+const present = (f, v) => f.type === 'image' ? { id: +v || 0, url: +v ? `/media/${v}` : '' } : f.type === 'banners' ? (v || []).map((b) => ({ img: { id: b.img, url: `/media/${b.img}` }, link: b.link, alt: b.alt, on: b.on })) : v;
 const valuesOut = () => Object.fromEntries(schema.fields.map((f) => [f.key, present(f, saved[f.key])]));
 const paletteOf = (vals) => derive({ brand: vals.color_brand, accent: vals.color_accent, ink: vals.color_ink, sale: vals.color_sale });
 
@@ -59,6 +65,9 @@ function renderSite(v) {
   const rad = { sharp: [6, 10, 14], soft: [12, 20, 32], round: [16, 26, 40] }[v.radius] || [12, 20, 32];
   const vars = ':root{' + Object.entries(p).map(([k, x]) => `--${k}:${x}`).join(';') + `;--ink-rgb:${rgb};--r-s:${rad[0]}px;--r-m:${rad[1]}px;--r-l:${rad[2]}px}`;
   const gold = v.hero_style === 'gold';
+  const navHtml = (v.nav_items || []).length ? `<ul>${v.nav_items.filter((n) => n.on).map((n) => `<li><a href="${esc(n.url)}">${esc(n.title)}</a></li>`).join('')}</ul>` : '<ul><li class="current-menu-item"><a href="#">فروشگاه</a></li><li><a href="#">تخفیف‌ها</a></li><li><a href="#">تماس با ما</a></li></ul>';
+  const bl = (v.banners || []).filter((b) => b.on);
+  const bn = bl.length ? `<div class="bazar-banners">${bl.map((b) => `<div class="bazar-banner">${b.link ? `<a href="${esc(b.link)}"><img src="/media/${b.img}" alt="${esc(b.alt)}"></a>` : `<img src="/media/${b.img}" alt="${esc(b.alt)}">`}</div>`).join('')}</div>` : '';
   const logo = +v.logo ? `<span class="logo logo-img"><img src="/media/${+v.logo}" alt=""></span>` : `<a class="logo" href="#">${esc(v.site_title)}</a>`;
   const contacts = [v.phone && [v.phone, 'phone'], v.whatsapp && ['واتس‌اپ'], v.instagram && ['اینستاگرام'], v.telegram && ['تلگرام']].filter(Boolean).map((c) => `<a href="#">${esc(c[0])}</a>`).join('');
   const cats = ['لباس زنانه', 'اکسسوری', 'گجت', 'کیف و کفش', 'شال و روسری', 'ساعت', 'هدفون', 'عطر'];
@@ -68,15 +77,15 @@ function renderSite(v) {
   const rows = cats.slice(0, v.rows_count).map((c) => `<section class="wrap"><div class="sh"><h2>${c}</h2><a href="#">مشاهده همه</a></div>${cards(4)}</section>`).join('');
   return `<!doctype html><html dir="rtl" lang="fa" class="${''}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(v.site_title)}</title>
 <style>${themeCss().replace(/url\(assets\/fonts[^)]*\)/g, 'url(none)')}</style><style id="bazar-vars">${vars}</style></head>
-<body class="home ${v.tabbar_on ? '' : 'bz-no-tabbar'} ${String(v.shop_columns) === '3' ? 'bz-cols-3' : ''}">
+<body class="home ${v.tabbar_on ? '' : 'bz-no-tabbar'} ${String(v.shop_columns) === '3' ? 'bz-cols-3' : ''} ${v.fx === false ? '' : 'bz-fx'}">
 ${v.topbar_on ? `<div class="topbar"><div class="wrap"><span>${esc(v.topbar)}</span><nav>${contacts}</nav></div></div>` : ''}
 <header class="hd"><div class="wrap hd-main"><button class="ico menu-btn">${ic(IC.menu)}</button>${logo}
 <form class="search" onsubmit="return false"><select><option>همه دسته‌ها</option></select><input type="search" placeholder="جستجوی محصول…"><button>${ic(IC.search)}</button></form>
 <div class="hd-act"><a class="ico" href="#">${ic(IC.user)}</a><button class="ico">${ic(IC.bag)}<b class="cart-count">۲</b></button></div></div>
-<nav class="catbar"><div class="wrap"><div class="allcats"><button>${ic(IC.menu)} همه دسته‌ها</button></div><div class="primary-nav"><ul><li class="current-menu-item"><a href="#">فروشگاه</a></li><li><a href="#">تخفیف‌ها</a></li><li><a href="#">تماس با ما</a></li></ul></div></div></nav></header>
+<nav class="catbar"><div class="wrap"><div class="allcats"><button>${ic(IC.menu)} همه دسته‌ها</button></div><div class="primary-nav">${navHtml}</div></div></nav></header>
 <main style="display:flex;flex-direction:column">
-<section class="wrap hero ${gold ? 'hero-gold' : ''}" style="order:0"><div class="hero-main ${gold ? 'is-gold' : ''}"><div class="hero-fb"><div class="hero-fb-t"><h2>${esc(v.hero_title)}</h2><p>${esc(v.hero_text)}</p>
-<div class="row"><a class="btn btn-a" href="#">${esc(v.hero_btn1)}</a><a class="btn btn-o" href="#">${esc(v.hero_btn2)}</a></div></div><div class="arches"><i></i><i></i><i></i></div></div></div>
+<section class="wrap hero ${gold && !bn ? 'hero-gold' : ''}" style="order:0"><div class="hero-main ${gold && !bn ? 'is-gold' : ''}">${bn || `<div class="hero-fb"><div class="hero-fb-t"><h2>${esc(v.hero_title)}</h2><p>${esc(v.hero_text)}</p>
+<div class="row"><a class="btn btn-a" href="#">${esc(v.hero_btn1)}</a><a class="btn btn-o" href="#">${esc(v.hero_btn2)}</a></div></div><div class="arches"><i></i><i></i><i></i></div></div>`}</div>
 <div class="hero-side"><a class="tile t-accent" href="#"><b>${cats[0]}</b><span>مشاهده محصولات</span></a><a class="tile t-soft" href="#"><b>${cats[1]}</b><span>مشاهده محصولات</span></a></div></section>
 ${sec('categories', `<section class="wrap cats">${cats.map((c) => `<a class="cat" href="#"><span class="cat-i">${c[0]}</span>${c}</a>`).join('')}</section>`)}
 ${sec('featured', `<section class="wrap" id="featured"><div class="sh"><h2>${esc(v.featured_title)}</h2><div class="tabs"><button aria-selected="true">جدیدترین</button><button>پرفروش‌ها</button></div></div>${cards(v.featured_count)}</section>`)}
@@ -112,7 +121,7 @@ const server = http.createServer(async (req, res) => {
     const body = req.method === 'GET' ? Buffer.alloc(0) : await readBody(req);
     const data = () => { try { return JSON.parse(body.toString('utf8') || '{}'); } catch { return {}; } };
     if (route === '/bazar/v1/schema') return json(res, 200, schema);
-    if (route === '/bazar/v1/settings' && req.method === 'GET') return json(res, 200, { values: valuesOut(), palette: paletteOf(saved), site: { name: saved.site_title, url: `http://localhost:${PORT}/`, version: '4.0.0' } });
+    if (route === '/bazar/v1/settings' && req.method === 'GET') return json(res, 200, { values: valuesOut(), palette: paletteOf(saved), site: { nav_defaults: [{ title: 'فروشگاه', url: '/shop/', on: true }, { title: 'سبد خرید', url: '/cart/', on: true }, { title: 'حساب من', url: '/my-account/', on: true }, { title: 'درباره ما', url: '/about/', on: true, missing: true }], name: saved.site_title, url: `http://localhost:${PORT}/`, version: '4.0.0' } });
     if (route === '/bazar/v1/settings') {
       const { values } = data(); if (!values || typeof values !== 'object') return json(res, 400, { code: 'bazar_bad_request', message: 'فیلد values الزامی است.' });
       const unknown = [], savedKeys = [];
@@ -133,6 +142,11 @@ const server = http.createServer(async (req, res) => {
       const id = nextId++; media.set(id, { type: req.headers['content-type'] || 'application/octet-stream', buf: body });
       return json(res, 201, { id, source_url: `/media/${id}`, media_details: { sizes: { medium: { source_url: `/media/${id}` } } } });
     }
+    const pr = prodApi(route, req.method, data(), url.searchParams) || ordApi(route, req.method, data(), url.searchParams);
+    if (pr) return json(res, pr.code, pr.obj);
+    if (route === '/__mock/new-order' && req.method === 'POST') return json(res, 200, { id: ordApi.addNew() });
+    if (route === '/__mock/new-request' && req.method === 'POST') { const d = data() || {}; return json(res, 200, { id: ordApi.addRequest({ short: !!d.short, name: d.name }) }); }
+    if (route === '/__mock/peek' && req.method === 'GET') return json(res, 200, ordApi.peek(+url.searchParams.get('id')));
     return json(res, 404, { code: 'rest_no_route', message: 'No route was found matching the URL and request method.' });
   }
 
