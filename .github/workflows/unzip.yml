@@ -22,6 +22,11 @@ jobs:
             if [ "$n" -eq 1 ] && [ -d "/tmp/x/$(ls -A /tmp/x)" ]; then
               d="/tmp/x/$(ls -A /tmp/x)"
             fi
+            if [ -d "$d/.github/workflows" ]; then
+              mkdir -p pending-workflows
+              cp -a "$d/.github/workflows/." pending-workflows/
+            fi
+            rm -rf "$d/.github"
             cp -a "$d"/. .
             git rm -q "$z"
             rm -rf /tmp/x
