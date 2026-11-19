@@ -255,13 +255,13 @@ function renderDetail() {
 
   /* --- مشتری --- */
   const ci = o.customer_info || {};
-  const wa = waLink(ci.phone);
+  const wa = waLink(ci.whatsapp || ci.phone); // اگر مشتری شماره‌ی واتس‌اپ داده همان، وگرنه شماره‌ی تماس
   const acts = h('div', { class: 'btnrow' },
     ci.phone ? h('a', { class: 'btn sm', href: 'tel:' + telDigits(ci.phone) }, icon('call', 18), 'تماس') : null,
     wa ? h('a', { class: 'btn sm', href: wa, target: '_blank', rel: 'noopener' }, icon('chat', 18), 'واتس‌اپ') : null,
     isEmail(ci.email) ? h('a', { class: 'btn sm ghost', href: 'mailto:' + ci.email }, 'ایمیل') : null);
   const custCard = card('مشتری و ارسال',
-    kv('نام', ci.name), ci.phone ? kv('تلفن', h('span', { dir: 'ltr' }, ci.phone)) : null, kv('ایمیل', ci.email), acts,
+    kv('نام', ci.name), ci.phone ? kv('تلفن', h('span', { dir: 'ltr' }, ci.phone)) : null, ci.whatsapp ? kv('واتس‌اپ', h('span', { dir: 'ltr' }, ci.whatsapp)) : null, kv('ایمیل', ci.email), acts,
     o.shipping_address ? h('div', { class: 'addr' }, h('small', {}, icon('pin', 16), ' آدرس ارسال'), h('p', {}, o.shipping_address),
       h('div', { class: 'btnrow' },
         h('button', { type: 'button', class: 'btn sm ghost', onclick: () => copyText(o.shipping_address, 'آدرس') }, icon('copy', 18), 'کپی آدرس'),
@@ -292,7 +292,16 @@ function requestCard(o) {
   const r = o.request;
   if (!r) return null;
   if (r.state === 'approved') {
-    return card('درخواست خرید', h('div', { class: 'msg warn' }, 'تأیید شده؛ منتظر پرداخت مشتری' + (r.expires ? ` (تا ${when(r.expires)})` : '') + '. اگر پرداخت نکند سفارش خودکار لغو و موجودی آزاد می‌شود.'));
+    const ci = o.customer_info || {}, wa = waLink(ci.whatsapp || ci.phone), tel = telDigits(ci.phone || '');
+    const msg = `سلام ${ci.name || ''}، درخواست خرید شما تأیید شد و کالا برای شما رزرو شد. برای پرداخت از این لینک استفاده کنید: ${r.pay_url || ''}`;
+    return card('درخواست خرید',
+      h('div', { class: 'msg warn' }, 'تأیید شده؛ منتظر پرداخت مشتری' + (r.expires ? ` (تا ${when(r.expires)})` : '') + '. اگر پرداخت نکند سفارش خودکار لغو و موجودی آزاد می‌شود.'),
+      r.pay_url ? h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'لینک پرداخت مشتری'), h('input', { class: 'in', type: 'text', readonly: true, dir: 'ltr', value: r.pay_url, 'aria-label': 'لینک پرداخت', onfocus: (e) => e.target.select() })) : null,
+      isEmail(ci.email) ? h('p', { class: 'help' }, 'لینک برای ایمیل مشتری هم فرستاده شد؛ اگر نرسید از دکمه‌های زیر بفرستید.') : h('p', { class: 'help', 'data-rq': 'noemail' }, 'مشتری ایمیل ندارد؛ لینک را از دکمه‌های زیر برایش بفرستید' + (ci.whatsapp ? ' (واتس‌اپ به شماره‌ی واتس‌اپ او می‌رود، پیامک به شماره‌ی تماس).' : '.')),
+      r.pay_url ? h('div', { class: 'btnrow' },
+        h('button', { type: 'button', class: 'btn sm', 'data-act': 'copy-pay', onclick: () => copyText(r.pay_url, 'لینک پرداخت') }, 'کپی لینک'),
+        wa ? h('a', { class: 'btn sm', 'data-act': 'wa-pay', href: `${wa}?text=${encodeURIComponent(msg)}`, target: '_blank', rel: 'noopener' }, icon('chat', 18), 'واتس‌اپ') : null,
+        tel ? h('a', { class: 'btn sm ghost', 'data-act': 'sms-pay', href: `sms:${tel}?&body=${encodeURIComponent(msg)}` }, 'پیامک') : null) : null);
   }
   const rows = (r.stock || []).map((s) => h('div', { class: 'oitem rq ' + (s.ok ? 'ok' : 'bad'), 'data-rq': s.ok ? 'ok' : 'short' },
     h('div', { class: 'pinfo' },
@@ -310,6 +319,7 @@ function requestCard(o) {
   return card('درخواست خرید: بررسی موجودی',
     h('div', { class: r.all_ok ? 'msg ok-m' : 'msg bad', role: 'status' }, r.all_ok ? 'موجودی همه‌ی اقلام کافی است.' : 'موجودی بعضی اقلام کافی نیست.'),
     h('div', { class: 'oitems' }, rows),
+    isEmail((o.customer_info || {}).email) ? null : h('p', { class: 'help', 'data-rq': 'noemail' }, 'این مشتری ایمیل ندارد؛ بعد از تأیید، لینک پرداخت را همین‌جا با واتس‌اپ یا پیامک برایش بفرستید.'),
     h('div', { class: 'field', style: { marginTop: '12px' } }, h('span', { class: 'lbl' }, 'مهلت پرداخت بعد از تأیید (ساعت)'), hours),
     h('div', { class: 'field' }, apNote),
     h('div', { class: 'btnrow' }, h('button', { type: 'button', class: 'btn primary', 'data-act': 'approve', onclick: approveRequest }, icon('check', 18), r.all_ok ? 'تأیید و ارسال لینک پرداخت' : 'تأیید با وجود کمبود موجودی')),
