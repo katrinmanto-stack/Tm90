@@ -4,9 +4,10 @@ import { loadConn, saveConn, clearConn, connect, call, uploadImage } from './api
 import { renderField, presetsBlock, paletteStrip } from './fields.js';
 import { mountProducts, saveCurrent, isDirty } from './products.js';
 import { mountOrders, startOrderWatch, reloadOrders, isOrderDirty } from './orders.js';
+import { mountStats } from './stats.js';
 import { openStudio } from './photo.js';
 
-const APP_VERSION = '2.6.0';
+const APP_VERSION = '2.7.0';
 const root = $('#app');
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -113,7 +114,7 @@ function viewMain() {
       pane),
     h('div', { class: 'bar', id: 'bar' }));
   drawGroups(); renderForm(); updateBar();
-  if (S.tab === 'products' || S.tab === 'orders') setTab(S.tab); else if (wide()) schedulePreview(true);
+  if (fullTab(S.tab)) setTab(S.tab); else if (wide()) schedulePreview(true);
   watchOrders();
 }
 
@@ -121,12 +122,12 @@ function viewMain() {
 const prodCtx = () => ({ badge: (n) => setOrderBadge(n), call: (route, opts) => call(S.conn, route, opts), upload: (f) => uploadImage(S.conn, f), toast, studio: (file, onUse) => openStudio({ toast }, file, { onUse }), siteName: S.site.name, siteUrl: S.site.url, woocommerce: S.site.woocommerce !== false });
 function tabsNav() {
   const t = (id, label, ic) => h('button', { type: 'button', role: 'tab', 'data-tab': id, class: S.tab === id ? 'on' : '', 'aria-selected': String(S.tab === id), onclick: () => setTab(id) }, icon(ic, 18), label);
-  return h('nav', { class: 'apptabs', role: 'tablist', 'aria-label': 'بخش‌های اپ' }, t('look', 'ظاهر', 'palette'), t('banners', 'بنرها', 'image'), t('products', 'محصولات', 'box'), t('orders', 'سفارشات', 'receipt'));
+  return h('nav', { class: 'apptabs', role: 'tablist', 'aria-label': 'بخش‌های اپ' }, t('look', 'ظاهر', 'palette'), t('banners', 'بنرها', 'image'), t('products', 'محصولات', 'box'), t('orders', 'سفارشات', 'receipt'), t('stats', 'آمار', 'chart'));
 }
 function syncTabs() {
   document.querySelectorAll('[data-tab]').forEach((b) => { const on = b.dataset.tab === S.tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
 }
-const fullTab = (t) => t === 'products' || t === 'orders';
+const fullTab = (t) => t === 'products' || t === 'orders' || t === 'stats';
 function setTab(t) {
   S.tab = t;
   if (t === 'banners') S.group = 'home';
@@ -137,6 +138,7 @@ function setTab(t) {
   if (t !== 'banners') window.scrollTo({ top: 0 });
   if (t === 'products') mountProducts($('#form'), prodCtx());
   else if (t === 'orders') mountOrders($('#form'), prodCtx());
+  else if (t === 'stats') mountStats($('#form'), prodCtx());
   else {
     drawGroups(); renderForm(); updateBar(); schedulePreview(true);
     if (t === 'banners') requestAnimationFrame(() => { const el = $('.field[data-key=banners]'); if (el) { const top = el.getBoundingClientRect().top + scrollY - 130; window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' }); } });
