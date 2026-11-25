@@ -2,6 +2,7 @@
 import { h, debounce } from './dom.js';
 import { icon } from './icons.js';
 import { analyze, autoSeo, gradeLabel, len, clip, stripHtml } from './seo.js';
+import { variationsCard, varFromServer, variablePayload, checkVariable, newAttr } from './variations.js';
 
 const P = { meta: null, items: [], total: 0, page: 0, pages: 0, q: '', status: '', loading: false, error: '', token: 0 };
 let host = null, C = null, E = null, listBox = null, bar = null, seoRefs = null, bulkBtn = null;
@@ -81,15 +82,19 @@ function drawList() {
   const out = [];
   const noSeo = P.meta && !seoWritable();
   for (const p of P.items) {
-    const price = p.sale_price
-      ? [h('b', {}, fmt(p.price)), h('s', {}, fmt(p.regular_price))]
-      : [h('b', {}, fmt(p.price))];
+    const isVar = p.type === 'variable';
+    const price = isVar
+      ? [h('small', {}, p.price_min ? 'از' : ''), h('b', {}, fmt(p.price_min))]
+      : p.sale_price
+        ? [h('b', {}, fmt(p.price)), h('s', {}, fmt(p.regular_price))]
+        : [h('b', {}, fmt(p.price))];
     out.push(h('button', { type: 'button', class: 'prow', onclick: () => openEdit(p.id) },
       h('div', { class: 'pthumb' }, p.image && p.image.url ? h('img', { src: p.image.url, alt: '', loading: 'lazy' }) : icon('image', 22)),
       h('div', { class: 'pinfo' },
         h('div', { class: 'pname' }, p.name || '(بدون نام)'),
         h('div', { class: 'pprice' }, ...price, h('small', {}, (P.meta && P.meta.currency) || '')),
         h('div', { class: 'tags' },
+          isVar ? h('span', { class: 'tag', 'data-vtag': '1' }, `چندگزینه‌ای · ${new Intl.NumberFormat('fa-IR').format(p.variations_count || 0)}`) : null,
           p.status !== 'publish' ? h('span', { class: 'tag' }, p.status === 'draft' ? 'پیش‌نویس' : 'در انتظار') : null,
           p.stock_status === 'outofstock' ? h('span', { class: 'tag bad' }, 'ناموجود') : null,
           noSeo ? null : h('span', { class: 'tag ' + (p.seo_set ? 'ok' : 'warn') }, p.seo_set ? 'سئو تنظیم‌شده' : 'سئو ناقص')))));
@@ -107,6 +112,7 @@ const blank = () => ({
   manage_stock: false, stock_quantity: 0, stock_status: 'instock', categories: [],
   image: { id: 0, url: '', alt: '' }, gallery: [], seo: { title: '', desc: '', kw: '', noindex: false },
   type: 'simple', edit_prices: true, permalink: '',
+  attributes: [], variations: [], base_price: '', base_sale: '', base_stock: '', gen: false,
 });
 
 function fromServer(p) {
@@ -118,15 +124,16 @@ function fromServer(p) {
     categories: p.categories || [], image: p.image && p.image.id ? p.image : { id: 0, url: '', alt: '' }, gallery: p.gallery || [],
     seo: { title: '', desc: '', kw: '', noindex: false, ...(p.seo || {}) },
     type: p.type || 'simple', edit_prices: p.edit_prices !== false, permalink: p.permalink || '',
+    ...varFromServer(p),
   };
 }
 
 async function openEdit(id) {
-  if (id == null) { E = { id: 0, v: blank(), base: '', busy: false }; E.base = JSON.stringify(E.v); return renderEdit(); }
+  if (id == null) { E = { id: 0, st: 'simple', v: blank(), base: '', busy: false }; E.base = JSON.stringify(E.v); return renderEdit(); }
   host.replaceChildren(h('div', { class: 'loading sm' }, h('div', { class: 'spin' })));
   try {
     const p = await C.call(`/bazar/v1/products/${id}`);
-    E = { id, v: fromServer(p), base: '', busy: false }; E.base = JSON.stringify(E.v);
+    E = { id, st: p.type || 'simple', v: fromServer(p), base: '', busy: false }; E.base = JSON.stringify(E.v);
     renderEdit();
   } catch (e) { C.toast(e.message, 'bad'); renderList(); }
 }
@@ -170,6 +177,13 @@ function renderEdit() {
     fld('توضیح کوتاه', area(() => v.short_description, (x) => { v.short_description = x; touch(); }, 3, { label: 'توضیح کوتاه' }), 'بالای دکمه‌ی خرید نمایش داده می‌شود.'),
     fld('توضیحات کامل', area(() => v.description, (x) => { v.description = x; touch(); }, 8, { label: 'توضیحات کامل' }), 'مشخصات، جنس، اندازه، نحوه‌ی نگهداری و کاربرد را بنویسید (حداقل ۱۵۰ کلمه برای سئو).'));
 
+  const modeCard = E.st === 'simple' ? h('section', { class: 'card' }, toggleRow('این محصول چند رنگ / چند سایز دارد', 'برای هر گزینه (مثل «قرمز / بزرگ») قیمت و موجودی جدا تنظیم می‌شود.', () => v.type === 'variable', (on) => {
+    if (on) {
+      if (E.id && !confirm('این محصول به «محصول چندگزینه‌ای» تبدیل می‌شود و بعد از ذخیره در اپ برگشت‌پذیر نیست. قیمت و موجودی فعلی روی هر گزینه‌ی تازه کپی می‌شود. ادامه می‌دهید؟')) { renderEdit(); return; }
+      Object.assign(v, { type: 'variable', edit_prices: false, attributes: [newAttr('رنگ')], variations: [], gen: true, base_price: v.regular_price, base_sale: v.sale_price, base_stock: v.manage_stock ? String(v.stock_quantity) : '' });
+    } else Object.assign(v, { type: 'simple', edit_prices: true, attributes: [], variations: [], gen: false });
+    renderEdit(); touch();
+  })) : null;
   const price = h('section', { class: 'card' }, h('h2', {}, 'قیمت و موجودی'));
   if (v.edit_prices) {
     price.append(
@@ -204,7 +218,8 @@ function renderEdit() {
   drawCats();
   const catCard = h('section', { class: 'card' }, h('h2', {}, 'دسته‌بندی'), cats.length ? catBox : h('p', { class: 'help' }, P.meta ? 'هنوز دسته‌ای ساخته نشده؛ در ووکامرس بسازید.' : 'در حال بارگذاری دسته‌ها…'));
 
-  host.replaceChildren(top, basic, price, catCard, imagesCard(), seoCard(), h('div', { class: 'bar pbar', id: 'pbar' }));
+  const varK = { v, touch, fld, inp, toggleRow, pick: pickFile, save: () => saveCurrent(), currency: P.meta && P.meta.currency, isNew: !E.id };
+  host.replaceChildren(...[top, basic, modeCard, v.type === 'variable' ? variationsCard(varK) : price, catCard, imagesCard(), seoCard(), h('div', { class: 'bar pbar', id: 'pbar' })].filter(Boolean));
   bar = host.querySelector('#pbar');
   updateBar(); seoRefresh();
 }
@@ -354,7 +369,8 @@ function payload(v) {
   };
   if (v.slug.trim()) o.slug = v.slug.trim();
   if (v.edit_prices) { o.regular_price = v.regular_price; o.sale_price = v.sale_price; }
-  if (v.manage_stock) o.stock_quantity = v.stock_quantity; else o.stock_status = v.stock_status;
+  if (v.type === 'variable') Object.assign(o, variablePayload(v), { manage_stock: false });
+  else if (v.manage_stock) o.stock_quantity = v.stock_quantity; else o.stock_status = v.stock_status;
   [v.image, ...v.gallery].filter((x) => x.id).forEach((x) => { o.alts[x.id] = x.alt || ''; });
   if (seoWritable()) o.seo = { title: v.seo.title, desc: v.seo.desc, kw: v.seo.kw, ...(P.meta.seo.noindex ? { noindex: !!v.seo.noindex } : {}) };
   return o;
@@ -363,6 +379,7 @@ function payload(v) {
 export async function saveCurrent() {
   if (!E || E.busy) return;
   if (!E.v.name.trim()) { C.toast('نام محصول را وارد کنید.', 'bad'); return; }
+  if (E.v.type === 'variable') { const ve = checkVariable(E.v); if (ve) { C.toast(ve, 'bad'); E.v.gen = false; return; } }
   let auto = [];
   if (autoOn() && P.meta) auto = fillSeo(E.v, false);
   E.busy = true; updateBar();
@@ -370,12 +387,12 @@ export async function saveCurrent() {
     const route = E.id ? `/bazar/v1/products/${E.id}` : '/bazar/v1/products';
     const r = await C.call(route, { method: 'POST', body: payload(E.v) });
     const created = !E.id;
-    E.id = r.id; E.v = fromServer(r); E.base = JSON.stringify(E.v);
+    E.id = r.id; E.st = r.type || E.st; E.v = fromServer(r); E.base = JSON.stringify(E.v);
     const i = P.items.findIndex((x) => x.id === r.id);
     if (i >= 0) P.items[i] = r; else { P.items.unshift(r); P.total += 1; }
     C.toast((created ? 'محصول ساخته شد' : 'تغییرات محصول ذخیره شد') + (auto.length ? ` · سئو خودکار پر شد: ${auto.join('، ')}` : ''), 'ok');
     renderEdit();
-  } catch (e) { C.toast(e.message, 'bad'); }
+  } catch (e) { C.toast(e.message, 'bad'); if (E) E.v.gen = false; }
   finally { if (E) { E.busy = false; updateBar(); } }
 }
 

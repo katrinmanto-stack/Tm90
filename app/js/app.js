@@ -7,7 +7,7 @@ import { mountOrders, startOrderWatch, reloadOrders, isOrderDirty } from './orde
 import { mountStats } from './stats.js';
 import { openStudio } from './photo.js';
 
-const APP_VERSION = '2.7.0';
+const APP_VERSION = '2.9.0';
 const root = $('#app');
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);

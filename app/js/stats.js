@@ -18,7 +18,7 @@ const DEV = { mobile: 'موبایل', tablet: 'تبلت', desktop: 'دسکتاپ
 const FUN = { sessions: 'بازدید (نشست)', product: 'مشاهده‌ی محصول', cart: 'افزودن به سبد', checkout: 'ورود به پرداخت', placed: 'ثبت سفارش یا درخواست', paid: 'سفارش پرداخت‌شده' };
 
 let host = null, C = null;
-const S = { range: '7', metric: 'visitors', data: null, loading: false, error: '', at: 0 };
+const S = { range: '7', metric: 'visitors', data: null, loading: false, error: '', at: 0, notify: null };
 
 export function mountStats(el, ctx) {
   host = el; C = ctx;
@@ -34,6 +34,38 @@ async function load() {
   try { S.data = await C.call('/bazar/v1/stats?range=' + S.range); S.at = Date.now(); }
   catch (e) { S.error = friendly(e); }
   S.loading = false; draw();
+  loadNotify();
+}
+
+/* «منتظر موجودی» (قالب ۴٫۱۶+): اگر قالب قدیمی‌تر باشد ساکت نادیده گرفته می‌شود */
+async function loadNotify() {
+  try { S.notify = await C.call('/bazar/v1/notify'); } catch (e) { S.notify = null; }
+  draw();
+}
+async function notifyDone(ids, okMsg) {
+  try { await C.call('/bazar/v1/notify/done', { method: 'POST', body: { ids } }); C.toast(okMsg, 'ok'); await loadNotify(); }
+  catch (e) { C.toast(e.message || 'انجام نشد.', 'bad'); }
+}
+const LAT = (v) => String(v).replace(/[۰-۹]/g, (c) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(c));
+const isPhone = (c) => /^\+?\d{10,15}$/.test(LAT(c));
+function waNum(c) { let n = LAT(c).replace(/\D/g, ''); if (n.startsWith('00')) n = n.slice(2); if (n.length === 11 && n.startsWith('0')) n = '98' + n.slice(1); return n; }
+function notifyCard() {
+  const n = S.notify;
+  if (!n || !(n.items || []).length) return null;
+  const blocks = n.items.map((it) => {
+    const p = it.product, msg = `سلام، «${p.name}» دوباره موجود شد: ${p.url}`, ids = it.contacts.map((c) => c.id);
+    return h('div', { class: 'nwrap', 'data-nprod': p.id },
+      h('div', { class: 'nhead' },
+        h('div', { class: 'sname' }, h('a', { href: p.url, target: '_blank', rel: 'noopener' }, p.name), h('small', {}, `${num(it.contacts.length)} نفر منتظر` + (p.in_stock && p.qty != null ? ` · موجودی فعلی ${num(p.qty)}` : ''))),
+        h('span', { class: 'tag ' + (p.in_stock ? 'ok' : '') }, p.in_stock ? 'موجود شد' : 'ناموجود')),
+      ...it.contacts.map((c) => h('div', { class: 'ncontact', 'data-nid': c.id },
+        h('span', { class: 'nc', dir: 'ltr' }, c.c),
+        isPhone(c.c) ? h('a', { class: 'btn sm', 'data-act': 'n-wa', href: `https://wa.me/${waNum(c.c)}?text=${encodeURIComponent(msg)}`, target: '_blank', rel: 'noopener' }, 'واتس‌اپ') : null,
+        isPhone(c.c) ? h('a', { class: 'btn sm ghost', 'data-act': 'n-sms', href: `sms:${LAT(c.c).replace(/[^\d+]/g, '')}?&body=${encodeURIComponent(msg)}` }, 'پیامک') : h('a', { class: 'btn sm', 'data-act': 'n-mail', href: `mailto:${c.c}?subject=${encodeURIComponent(p.name + ' موجود شد')}&body=${encodeURIComponent(msg)}` }, 'ایمیل'),
+        h('button', { type: 'button', class: 'btn sm ghost', 'data-act': 'n-done', 'aria-label': 'اطلاع دادم', onclick: () => notifyDone([c.id], 'ثبت شد؛ از فهرست حذف شد') }, 'اطلاع دادم'))),
+      it.contacts.length > 1 ? h('button', { type: 'button', class: 'btn sm ghost nall', 'data-act': 'n-all', onclick: () => { if (confirm(`همه‌ی ${num(it.contacts.length)} نفر خبر داده شدند و از فهرست حذف شوند؟`)) notifyDone(ids, 'فهرست این محصول پاک شد'); } }, 'همه‌ی این محصول اطلاع داده شد') : null);
+  });
+  return card('منتظر موجودی شدن', h('p', { class: 'help' }, `${num(n.total)} نفر منتظر ${num(n.items.length)} محصول هستند. وقتی محصول موجود شد، از اینجا با واتس‌اپ یا پیامک خبرشان کنید و «اطلاع دادم» را بزنید. (ارسال خودکار نیاز به افزونه‌ی پیامک دارد.)`), ...blocks);
 }
 
 /* ---------- ابزارها ---------- */
@@ -154,7 +186,7 @@ function draw() {
     else if (!d.ready) kids.push(h('div', { class: 'msg warn' }, 'جدول آمار هنوز ساخته نشده. یک بار سایت را باز کنید (بدون ورود مدیر) و دوباره تازه‌سازی کنید. اگر درست نشد، دسترسی «ساخت جدول» دیتابیس هاست را بررسی کنید.'));
     const none = !d.totals.views && !d.totals.visitors && !(d.series || []).some((s) => s.views || s.placed);
     if (none && !d.since) kids.push(emptyCard(d));
-    else kids.push(kpis(d), chartCard(d), funnelCard(d), productsCard(d), sourcesCard(d), devicesCard(d), searchesCard(d),
+    else kids.push(kpis(d), notifyCard(), chartCard(d), funnelCard(d), productsCard(d), sourcesCard(d), devicesCard(d), searchesCard(d),
       h('p', { class: 'help', style: { margin: '0 14px 24px' } }, d.since ? `ثبت آمار از ${dayFmt.format(dt(d.since))} شروع شده. ` : '', 'اطلاعات شخصی (IP، کوکی، نشانی صفحه) ذخیره نمی‌شود.'));
     if (S.loading) kids.push(h('div', { class: 'help', style: { textAlign: 'center' } }, 'در حال تازه‌سازی…'));
   }
