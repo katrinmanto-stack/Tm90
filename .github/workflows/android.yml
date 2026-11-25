@@ -1,27 +1,30 @@
 name: android
 
-# ساخت فایل نصبی اندروید (APK). دستی: Actions → android → Run workflow
-# یا با ساختن تگ مثل v1.0.0 (APK به بخش Releases هم اضافه می‌شود).
 on:
   workflow_dispatch:
   push:
-    tags: ['v*']
+    tags:
+      - 'v*'
 
 permissions:
-  contents: write   # فقط برای ساختن Release روی تگ
+  contents: write
 
 jobs:
   apk:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
-        with: { node-version: 22 }
+        with:
+          node-version: 22
 
       - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: 21 }
+        with:
+          distribution: temurin
+          java-version: 21
 
       - name: Install Capacitor
         run: npm install --no-audit --no-fund
@@ -49,7 +52,7 @@ jobs:
           name: sungold-admin-apk
           path: sungold-admin.apk
 
-      - name: Attach APK to GitHub Release (tags only)
+      - name: Attach APK to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
