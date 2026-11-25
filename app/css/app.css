@@ -265,3 +265,22 @@ textarea.in{resize:vertical;min-height:84px}
 .slegend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px;font-size:13px;font-weight:700}.slegend span{display:inline-flex;align-items:center;gap:6px}.slegend i{display:block;width:10px;height:10px;border-radius:50%}
 .empty svg{color:var(--mut);margin-bottom:6px}
 @media(max-width:440px){.apptabs button>svg{display:none}}
+
+/* منتظر موجودی (اپ ۲٫۸) */
+.nwrap{padding:12px 0;border-top:1px dashed var(--line)}.nwrap:first-of-type{border-top:0}
+.nhead{display:flex;align-items:center;gap:10px;margin-bottom:8px}.nhead .sname{flex:1}
+.ncontact{display:flex;align-items:center;gap:6px;padding:6px 0;flex-wrap:wrap}
+.nc{flex:1;min-width:120px;font-weight:700;overflow-wrap:anywhere}
+.nall{margin-top:6px}
+
+/* محصول متغیر (اپ ۲٫۹) */
+.vcard .vattr{padding:12px 0;border-bottom:1px dashed var(--line)}.vcard .vattr:last-of-type{border-bottom:0}
+.vattr-h{display:flex;align-items:center;gap:10px;margin-bottom:8px}.vattr-h .vname{flex:1;font-size:15px}
+.vopts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.vopt{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--brand-l);color:var(--brand-d);font-weight:700;font-size:13px}
+.vopt .x{border:0;background:none;color:inherit;font-size:16px;line-height:1;cursor:pointer;padding:0 0 1px}.vopt .x:disabled{opacity:.35;cursor:not-allowed}
+.vadd{display:flex;gap:8px}.vadd .in{flex:1;min-width:0}
+.vbase{margin:12px 0;padding:12px;border-radius:14px;background:var(--bg)}
+.vrow{margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:16px;background:var(--card,#fff)}.vrow.off{opacity:.65}
+.vrow-h{display:flex;align-items:center;gap:10px;margin-bottom:8px}.vlabel{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;overflow-wrap:anywhere}
+.vthumb{flex:none;width:48px;height:48px;border-radius:12px;border:1px dashed var(--line);background:var(--bg);display:grid;place-items:center;overflow:hidden;padding:0;cursor:pointer;color:var(--mut)}.vthumb img{width:100%;height:100%;object-fit:cover}
